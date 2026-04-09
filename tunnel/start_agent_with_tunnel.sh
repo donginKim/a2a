@@ -61,6 +61,15 @@ fi
 # 에이전트 시작
 echo "에이전트 시작 중..."
 cd "$AGENT_DIR"
+
+# venv 활성화
+SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -d "$SCRIPT_ROOT/.venv" ]; then
+    source "$SCRIPT_ROOT/.venv/bin/activate"
+elif [ -d "$SCRIPT_ROOT/venv" ]; then
+    source "$SCRIPT_ROOT/venv/bin/activate"
+fi
+
 export AGENT_PUBLIC_URL="$TUNNEL_URL"
 [ -f .env ] && set -a && source .env && set +a
 
