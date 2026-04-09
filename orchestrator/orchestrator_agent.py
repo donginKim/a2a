@@ -52,9 +52,7 @@ async def call_agent(
 ) -> str:
     """단일 에이전트에게 Task를 보내고 결과를 반환합니다."""
     try:
-        client = await A2AClient.get_client_from_agent_card_url(
-            http_client, agent.url
-        )
+        client = A2AClient(http_client, url=agent.url)
         response = await client.send_message(
             SendMessageRequest(
                 id=str(uuid.uuid4()),
