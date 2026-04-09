@@ -4,20 +4,20 @@
 
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 AGENT_PORT=${AGENT_PORT:-8001}
-ENV_FILE=${ENV_FILE:-"../agent/.env"}
-AGENT_DIR=${AGENT_DIR:-"../agent"}
+ENV_FILE=${ENV_FILE:-"$SCRIPT_ROOT/agent/.env"}
+AGENT_DIR=${AGENT_DIR:-"$SCRIPT_ROOT/agent"}
 
 echo "=========================================="
 echo "에이전트 + Cloudflare Tunnel 동시 시작"
 echo "=========================================="
 
-# cloudflared 설치 확인
-if ! command -v cloudflared &>/dev/null; then
-    echo "오류: cloudflared가 설치되어 있지 않습니다."
-    echo "설치: brew install cloudflared"
-    exit 1
-fi
+# 환경 검증 (install_agent.sh 호출)
+echo "환경 검증 중..."
+bash "$SCRIPT_ROOT/scripts/install_agent.sh"
+echo ""
 
 # 임시 로그 파일
 TUNNEL_LOG=$(mktemp)
@@ -63,7 +63,6 @@ echo "에이전트 시작 중..."
 cd "$AGENT_DIR"
 
 # venv 활성화
-SCRIPT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -d "$SCRIPT_ROOT/.venv" ]; then
     source "$SCRIPT_ROOT/.venv/bin/activate"
 elif [ -d "$SCRIPT_ROOT/venv" ]; then

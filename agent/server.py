@@ -5,6 +5,7 @@
 - 시작 시 오케스트레이터에 자동 등록
 """
 import asyncio
+from contextlib import asynccontextmanager
 import sys
 import httpx
 import uvicorn
@@ -129,8 +130,16 @@ def main():
 
     app = a2a_app.build()
 
-    # 시작 시 오케스트레이터 등록
-    asyncio.get_event_loop().run_until_complete(register_with_orchestrator(config))
+    # 서버가 준비된 후 오케스트레이터에 등록
+    original_lifespan = app.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan_with_register(app):
+        async with original_lifespan(app):
+            await register_with_orchestrator(config)
+            yield
+
+    app.router.lifespan_context = lifespan_with_register
 
     uvicorn.run(app, host=config.host, port=config.port, log_level="info")
 
