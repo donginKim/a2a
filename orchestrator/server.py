@@ -57,10 +57,6 @@ class OrchestratorExecutor(AgentExecutor):
             )
             return
 
-        await event_queue.enqueue_event(
-            new_agent_text_message(f"토론을 시작합니다: '{user_text}'")
-        )
-
         try:
             result = await run_debate(self.config, user_text)
             report = result.get("report", "보고서 생성 실패")

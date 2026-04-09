@@ -42,8 +42,6 @@ class ClaudeAgentExecutor(AgentExecutor):
             await event_queue.enqueue_event(new_agent_text_message("질문을 입력해주세요."))
             return
 
-        await event_queue.enqueue_event(new_agent_text_message("처리 중입니다..."))
-
         result = await process_with_claude(user_text, self.config)
         await event_queue.enqueue_event(new_agent_text_message(result))
 
