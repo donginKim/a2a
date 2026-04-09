@@ -52,12 +52,12 @@ class OrchestratorExecutor(AgentExecutor):
     async def execute(self, context: RequestContext, event_queue: asyncio.Queue) -> None:
         user_text = _extract_user_text(context)
         if not user_text:
-            await event_queue.put(
+            await event_queue.enqueue_event(
                 new_agent_text_message("토론 주제를 입력해주세요.")
             )
             return
 
-        await event_queue.put(
+        await event_queue.enqueue_event(
             new_agent_text_message(f"토론을 시작합니다: '{user_text}'")
         )
 
@@ -72,14 +72,14 @@ class OrchestratorExecutor(AgentExecutor):
                 f"**보고서 저장 위치**: {result.get('report_path', 'N/A')}\n\n"
                 f"---\n\n{report}"
             )
-            await event_queue.put(new_agent_text_message(final_msg))
+            await event_queue.enqueue_event(new_agent_text_message(final_msg))
         except Exception as e:
-            await event_queue.put(
+            await event_queue.enqueue_event(
                 new_agent_text_message(f"오류 발생: {str(e)}")
             )
 
     async def cancel(self, context: RequestContext, event_queue: asyncio.Queue) -> None:
-        await event_queue.put(new_agent_text_message("작업이 취소되었습니다."))
+        await event_queue.enqueue_event(new_agent_text_message("작업이 취소되었습니다."))
 
 
 def build_agent_card(config: OrchestratorConfig) -> AgentCard:

@@ -39,16 +39,16 @@ class ClaudeAgentExecutor(AgentExecutor):
     async def execute(self, context: RequestContext, event_queue: asyncio.Queue) -> None:
         user_text = _extract_user_text(context)
         if not user_text:
-            await event_queue.put(new_agent_text_message("질문을 입력해주세요."))
+            await event_queue.enqueue_event(new_agent_text_message("질문을 입력해주세요."))
             return
 
-        await event_queue.put(new_agent_text_message("처리 중입니다..."))
+        await event_queue.enqueue_event(new_agent_text_message("처리 중입니다..."))
 
         result = await process_with_claude(user_text, self.config)
-        await event_queue.put(new_agent_text_message(result))
+        await event_queue.enqueue_event(new_agent_text_message(result))
 
     async def cancel(self, context: RequestContext, event_queue: asyncio.Queue) -> None:
-        await event_queue.put(new_agent_text_message("작업이 취소되었습니다."))
+        await event_queue.enqueue_event(new_agent_text_message("작업이 취소되었습니다."))
 
 
 def build_agent_card(config: AgentConfig) -> AgentCard:
