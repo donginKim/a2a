@@ -48,7 +48,11 @@ if [ ! -d "$VENV_DIR" ]; then
     python3 -m venv "$VENV_DIR"
 fi
 source "$VENV_DIR/bin/activate"
-pip install -q -r "$AGENT_DIR/requirements.txt"
+if [ -f "$AGENT_DIR/requirements.txt" ]; then
+    pip install -q -r "$AGENT_DIR/requirements.txt"
+else
+    pip install -q a2a-sdk claude-agent-sdk uvicorn httpx starlette python-dotenv
+fi
 echo "Python 패키지 설치 완료"
 
 # 6. .env 파일 생성
