@@ -119,6 +119,29 @@ a2a/
 
 ---
 
+## 확장 로드맵
+
+```
+  토론/질문 ──저장──▶ ① Knowledge Base ──조회──▶ 토론 context
+      │                    │
+      │              활동 이력 제공
+      │                    ▼
+      │            ③ Skill Analyzer → 스킬 자동 업데이트
+      │                    │
+      └──▶ ② Stable Registry ◀── 더 정확한 스킬 매칭
+             (영속 저장, heartbeat)
+```
+
+| 순위 | 기능 | 설명 |
+|------|------|------|
+| 1 | **Knowledge Base** | 토론/질문 결과를 Vector DB + Document DB에 축적하여 시맨틱 검색 가능한 지식 저장소 구축 |
+| 2 | **안정성 강화** | InMemory → SQLite/Redis 영속 저장, 에이전트 heartbeat, 부분 실패 허용 |
+| 3 | **자동 스킬 재정의** | 에이전트의 활동 이력(참여 토론, 답변 내용, 로컬 데이터)을 분석하여 스킬 프로파일 자동 갱신 |
+
+> 자세한 설계는 [구현 가이드 - 확장 로드맵](docs/IMPLEMENTATION.md#확장-로드맵) 참조
+
+---
+
 ## 문서
 
 - [설치 가이드](docs/INSTALL.md)
