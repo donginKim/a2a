@@ -59,41 +59,46 @@ async def call_agent(
                 params=MessageSendParams(message=_make_message(prompt)),
             )
         )
-        # response 파싱: 다양한 응답 구조 처리
-        result = getattr(response, "result", response)
+        # response 래퍼 풀기: SendMessageResponse.root.result → 실제 Message/Task
+        root = getattr(response, "root", response)
+        result = getattr(root, "result", root)
 
-        # Message 직접 반환 (parts가 있는 경우)
-        if hasattr(result, "parts") and result.parts:
-            text = _extract_text(result)
-            if text:
-                return text
-
-        # Task 형태 (status.message에 텍스트)
-        status = getattr(result, "status", None)
-        if status:
-            msg = getattr(status, "message", None)
-            if msg and hasattr(msg, "parts"):
-                text = _extract_text(msg)
+        # 재귀적으로 텍스트 추출 시도
+        def try_extract(obj):
+            if obj is None:
+                return ""
+            # parts가 있으면 텍스트 추출
+            if hasattr(obj, "parts") and obj.parts:
+                text = _extract_text(obj)
                 if text:
                     return text
-
-        # history에서 마지막 메시지 추출
-        history = getattr(result, "history", None)
-        if history:
-            for h in reversed(history):
-                if hasattr(h, "parts"):
-                    text = _extract_text(h)
+            # Task: status.message
+            status = getattr(obj, "status", None)
+            if status:
+                msg = getattr(status, "message", None)
+                if msg:
+                    text = try_extract(msg)
                     if text:
                         return text
-
-        # artifacts에서 추출
-        artifacts = getattr(result, "artifacts", None)
-        if artifacts:
-            for a in artifacts:
-                if hasattr(a, "parts"):
-                    text = _extract_text(a)
+            # history
+            history = getattr(obj, "history", None)
+            if history:
+                for h in reversed(history):
+                    text = try_extract(h)
                     if text:
                         return text
+            # artifacts
+            artifacts = getattr(obj, "artifacts", None)
+            if artifacts:
+                for a in artifacts:
+                    text = try_extract(a)
+                    if text:
+                        return text
+            return ""
+
+        text = try_extract(result)
+        if text:
+            return text
 
         return f"[{agent.name}] 응답 파싱 실패: {str(response)[:200]}"
     except Exception as e:
