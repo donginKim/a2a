@@ -5,7 +5,9 @@
 - REST API로도 직접 호출 가능합니다
 """
 import asyncio
+import glob as globmod
 import json
+import os
 import sys
 import httpx
 import uvicorn
@@ -207,6 +209,57 @@ async def skill_query(request: Request) -> JSONResponse:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# REST API: 에이전트 헬스체크
+async def healthcheck_agents(request: Request) -> JSONResponse:
+    cfg: OrchestratorConfig = request.app.state.config
+    results = []
+    async with httpx.AsyncClient(timeout=5.0) as http_client:
+        for agent in cfg.registered_agents:
+            try:
+                resp = await http_client.get(f"{agent.url}/.well-known/agent.json")
+                results.append({
+                    "name": agent.name,
+                    "url": agent.url,
+                    "status": "online" if resp.status_code == 200 else f"error ({resp.status_code})",
+                    "ok": resp.status_code == 200,
+                })
+            except Exception as e:
+                results.append({
+                    "name": agent.name,
+                    "url": agent.url,
+                    "status": f"offline ({type(e).__name__})",
+                    "ok": False,
+                })
+    return JSONResponse({"agents": results})
+
+
+# REST API: 토론 내역 (reports 폴더의 파일 목록 + 내용)
+async def list_reports(request: Request) -> JSONResponse:
+    cfg: OrchestratorConfig = request.app.state.config
+    output_dir = cfg.output_dir
+    if not os.path.isdir(output_dir):
+        return JSONResponse({"reports": []})
+
+    files = sorted(globmod.glob(os.path.join(output_dir, "*.md")), reverse=True)
+    reports = []
+    for f in files[:20]:  # 최근 20개
+        fname = os.path.basename(f)
+        try:
+            with open(f, "r", encoding="utf-8") as fh:
+                content = fh.read()
+            # 파일명에서 타입과 타임스탬프 추출
+            rtype = "debate" if fname.startswith("report_") else "query"
+            reports.append({
+                "filename": fname,
+                "type": rtype,
+                "content": content,
+                "size": len(content),
+            })
+        except Exception:
+            reports.append({"filename": fname, "type": "unknown", "content": "", "size": 0})
+    return JSONResponse({"reports": reports})
+
+
 # SSE 스트리밍 토론
 async def stream_debate(request: Request):
     cfg: OrchestratorConfig = request.app.state.config
@@ -273,6 +326,8 @@ def create_app(config: OrchestratorConfig) -> Starlette:
         Route("/stream/debate", stream_debate, methods=["GET"]),
         Route("/agents/register", register_agent, methods=["POST"]),
         Route("/agents", list_agents, methods=["GET"]),
+        Route("/agents/health", healthcheck_agents, methods=["GET"]),
+        Route("/reports", list_reports, methods=["GET"]),
         Route("/debate", start_debate, methods=["POST"]),
         Route("/query", skill_query, methods=["POST"]),
     ]

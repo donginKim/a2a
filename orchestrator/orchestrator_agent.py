@@ -59,16 +59,43 @@ async def call_agent(
                 params=MessageSendParams(message=_make_message(prompt)),
             )
         )
-        # response는 Task 또는 Message 형태
-        if hasattr(response, "result"):
-            result = response.result
-            if hasattr(result, "status") and hasattr(result.status, "message"):
-                msg = result.status.message
-                if msg:
-                    return _extract_text(msg)
-            if hasattr(result, "parts"):
-                return _extract_text(result)
-        return str(response)
+        # response 파싱: 다양한 응답 구조 처리
+        result = getattr(response, "result", response)
+
+        # Message 직접 반환 (parts가 있는 경우)
+        if hasattr(result, "parts") and result.parts:
+            text = _extract_text(result)
+            if text:
+                return text
+
+        # Task 형태 (status.message에 텍스트)
+        status = getattr(result, "status", None)
+        if status:
+            msg = getattr(status, "message", None)
+            if msg and hasattr(msg, "parts"):
+                text = _extract_text(msg)
+                if text:
+                    return text
+
+        # history에서 마지막 메시지 추출
+        history = getattr(result, "history", None)
+        if history:
+            for h in reversed(history):
+                if hasattr(h, "parts"):
+                    text = _extract_text(h)
+                    if text:
+                        return text
+
+        # artifacts에서 추출
+        artifacts = getattr(result, "artifacts", None)
+        if artifacts:
+            for a in artifacts:
+                if hasattr(a, "parts"):
+                    text = _extract_text(a)
+                    if text:
+                        return text
+
+        return f"[{agent.name}] 응답 파싱 실패: {str(response)[:200]}"
     except Exception as e:
         return f"[{agent.name} 오류] {str(e)}"
 
