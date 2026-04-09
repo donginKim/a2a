@@ -34,7 +34,7 @@
   .agents-panel h2{font-size:.9rem;color:var(--text-dim);margin-bottom:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
   .agents-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.7rem}
   .agent-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem;transition:border-color .2s,transform .15s;position:relative}
-  .agent-card:hover{border-color:var(--accent-dim);transform:translateY(-1px)}
+  .agent-card:hover{border-color:var(--accent-dim);transform:translateY(-1px);cursor:pointer}
   .agent-name{font-weight:700;font-size:.95rem;margin-bottom:.35rem;display:flex;align-items:center;gap:.4rem}
   .agent-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text-dim);flex-shrink:0}
   .agent-dot.online{background:var(--green)}
@@ -50,6 +50,45 @@
   .tag.data{background:rgba(251,191,36,.15);color:var(--orange);border-color:rgba(251,191,36,.2)}
   .section-label{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:.25rem;margin-bottom:.15rem}
   .no-agents{color:var(--text-dim);font-size:.85rem;text-align:center;padding:1.5rem}
+  .agent-card.add-card{border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;cursor:pointer;min-height:120px;color:var(--text-dim);transition:all .2s}
+  .agent-card.add-card:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
+  .agent-card.add-card .add-icon{font-size:1.8rem;line-height:1}
+  .agent-card.add-card .add-label{font-size:.82rem;font-weight:600}
+
+  /* modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:center;justify-content:center;padding:1rem}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow)}
+  .modal-header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.2rem;border-bottom:1px solid var(--border)}
+  .modal-header h3{font-size:1rem;font-weight:700}
+  .modal-close{background:none;border:none;color:var(--text-dim);font-size:1.3rem;cursor:pointer;padding:.2rem .5rem;border-radius:4px}
+  .modal-close:hover{color:var(--text);background:var(--surface2)}
+  .modal-body{padding:1.2rem}
+  .modal-tabs{display:flex;gap:0;margin-bottom:1rem;border-bottom:1px solid var(--border)}
+  .modal-tab{padding:.5rem 1rem;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--text-dim);border-bottom:2px solid transparent;transition:all .2s}
+  .modal-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .modal-panel{display:none}
+  .modal-panel.active{display:block}
+  .form-group{margin-bottom:.8rem}
+  .form-group label{display:block;font-size:.78rem;font-weight:600;color:var(--text-dim);margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.04em}
+  .form-group input,.form-group textarea{width:100%;padding:.5rem .7rem;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem;outline:none;font-family:inherit;transition:border-color .2s}
+  .form-group input:focus,.form-group textarea:focus{border-color:var(--accent)}
+  .form-group input::placeholder,.form-group textarea::placeholder{color:var(--text-dim)}
+  .form-group textarea{resize:vertical;min-height:60px}
+  .form-group .hint{font-size:.7rem;color:var(--text-dim);margin-top:.2rem}
+  .form-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border)}
+  .form-result{margin-top:.8rem;padding:.6rem .8rem;border-radius:6px;font-size:.82rem;display:none}
+  .form-result.success{display:block;background:rgba(52,211,153,.1);color:var(--green);border:1px solid rgba(52,211,153,.2)}
+  .form-result.error{display:block;background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.2)}
+  .setup-step{display:flex;gap:.7rem;margin-bottom:.8rem;align-items:flex-start}
+  .setup-num{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .setup-content{flex:1}
+  .setup-content .title{font-size:.85rem;font-weight:600;margin-bottom:.2rem}
+  .setup-content .desc{font-size:.78rem;color:var(--text-dim)}
+  .setup-content code{background:var(--surface2);padding:.2rem .5rem;border-radius:4px;font-size:.78rem;display:block;margin-top:.3rem;color:var(--accent);cursor:pointer;word-break:break-all;border:1px solid var(--border)}
+  .setup-content code:hover{border-color:var(--accent)}
+  .copied-toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);background:var(--green);color:#000;padding:.4rem 1rem;border-radius:6px;font-size:.8rem;font-weight:600;z-index:200;opacity:0;transition:opacity .3s}
+  .copied-toast.show{opacity:1}
 
   /* input section */
   .input-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem}
@@ -206,6 +245,162 @@
   </div>
 </div>
 
+<!-- Connect Modal -->
+<div class="modal-overlay" id="connectModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>내 PC 연결하기</h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-tabs">
+        <div class="modal-tab active" onclick="switchModalTab('register')">바로 등록</div>
+        <div class="modal-tab" onclick="switchModalTab('setup')">처음부터 설치</div>
+      </div>
+
+      <!-- Tab: 바로 등록 -->
+      <div class="modal-panel active" id="panelRegister">
+        <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:.8rem">
+          이미 에이전트가 실행 중이라면 아래 정보를 입력하세요.
+        </p>
+        <div class="form-group">
+          <label>에이전트 이름 *</label>
+          <input type="text" id="regName" placeholder="예: 홍길동-agent">
+        </div>
+        <div class="form-group">
+          <label>터널 URL *</label>
+          <input type="text" id="regUrl" placeholder="예: https://xxx-xxx.trycloudflare.com">
+          <div class="hint">start_agent_with_tunnel.sh 실행 시 표시되는 URL</div>
+        </div>
+        <div class="form-group">
+          <label>설명</label>
+          <input type="text" id="regDesc" placeholder="예: 데이터 분석 전문 에이전트">
+        </div>
+        <div class="form-group">
+          <label>스킬셋</label>
+          <input type="text" id="regSkills" placeholder="예: analysis,coding,finance" value="general,analysis">
+          <div class="hint">쉼표로 구분</div>
+        </div>
+        <div class="form-group">
+          <label>데이터 경로</label>
+          <input type="text" id="regData" placeholder="예: /Users/me/data,/Users/me/reports">
+          <div class="hint">에이전트가 참고할 로컬 폴더 경로 (쉼표로 구분)</div>
+        </div>
+        <div class="form-group">
+          <label>MCP 서버</label>
+          <input type="text" id="regMcp" placeholder="예: github,slack,filesystem">
+          <div class="hint">쉼표로 구분</div>
+        </div>
+        <div class="form-result" id="regResult"></div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" onclick="closeModal()">취소</button>
+          <button class="btn btn-primary" onclick="registerAgent()" id="btnRegister">등록하기</button>
+        </div>
+      </div>
+
+      <!-- Tab: 처음부터 설치 -->
+      <div class="modal-panel" id="panelSetup">
+        <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:1rem">
+          Mac에서 처음 설치하는 경우 아래 순서대로 진행하세요.
+        </p>
+        <div class="setup-step">
+          <div class="setup-num">1</div>
+          <div class="setup-content">
+            <div class="title">프로젝트 클론</div>
+            <code onclick="copyText(this)">git clone &lt;repo-url&gt; && cd a2a</code>
+          </div>
+        </div>
+        <div class="setup-step">
+          <div class="setup-num">2</div>
+          <div class="setup-content">
+            <div class="title">자동 설치 스크립트 실행</div>
+            <div class="desc">Python, Node.js, Claude Code CLI, cloudflared 등 자동 설치</div>
+            <code onclick="copyText(this)">bash scripts/install_agent.sh</code>
+          </div>
+        </div>
+        <div class="setup-step">
+          <div class="setup-num">3</div>
+          <div class="setup-content">
+            <div class="title">Claude Code 로그인</div>
+            <div class="desc">본인 Claude 구독 계정으로 로그인</div>
+            <code onclick="copyText(this)">claude</code>
+          </div>
+        </div>
+        <div class="setup-step">
+          <div class="setup-num">4</div>
+          <div class="setup-content">
+            <div class="title">참고 데이터 넣기</div>
+            <div class="desc">에이전트가 참고할 파일(PDF, CSV, MD 등)을 data 폴더에 복사</div>
+            <code onclick="copyText(this)">cp ~/내자료/* agent/data/</code>
+          </div>
+        </div>
+        <div class="setup-step">
+          <div class="setup-num">5</div>
+          <div class="setup-content">
+            <div class="title">에이전트 + 터널 시작</div>
+            <div class="desc">자동으로 터널 URL 생성 + 오케스트레이터 등록</div>
+            <code onclick="copyText(this)">cd tunnel && bash start_agent_with_tunnel.sh</code>
+          </div>
+        </div>
+        <div class="setup-step">
+          <div class="setup-num">6</div>
+          <div class="setup-content">
+            <div class="title">확인</div>
+            <div class="desc">이 대시보드에서 내 에이전트가 online으로 표시되면 완료!</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Edit Agent Modal -->
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="editTitle">에이전트 수정</h3>
+      <button class="modal-close" onclick="closeEditModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editOrigName">
+      <div class="form-group">
+        <label>에이전트 이름</label>
+        <input type="text" id="editName" disabled style="opacity:.6">
+      </div>
+      <div class="form-group">
+        <label>URL</label>
+        <input type="text" id="editUrl" disabled style="opacity:.6">
+        <div class="hint">URL은 터널 재시작 시 자동 갱신됩니다</div>
+      </div>
+      <div class="form-group">
+        <label>설명</label>
+        <input type="text" id="editDesc" placeholder="에이전트 설명">
+      </div>
+      <div class="form-group">
+        <label>스킬셋</label>
+        <input type="text" id="editSkills" placeholder="예: analysis,coding,finance">
+        <div class="hint">쉼표로 구분. 오케스트레이터가 주제에 맞는 에이전트 선택 시 사용</div>
+      </div>
+      <div class="form-group">
+        <label>데이터 경로</label>
+        <input type="text" id="editData" placeholder="예: /Users/me/data">
+        <div class="hint">쉼표로 구분</div>
+      </div>
+      <div class="form-group">
+        <label>MCP 서버</label>
+        <input type="text" id="editMcp" placeholder="예: github,slack">
+        <div class="hint">쉼표로 구분</div>
+      </div>
+      <div class="form-result" id="editResult"></div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="deleteAgent()" id="btnDelete" style="margin-right:auto;color:var(--red);border-color:var(--red)">삭제</button>
+        <button class="btn btn-secondary" onclick="closeEditModal()">취소</button>
+        <button class="btn btn-primary" onclick="saveAgent()" id="btnSave">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="copied-toast" id="copiedToast">복사됨!</div>
+
 <script>
 function renderMd(text) {
   if (!text) return '';
@@ -304,8 +499,12 @@ async function loadAgents() {
 
 function renderAgents(agents) {
   const grid = $('agentsGrid');
+  const addCard = `<div class="agent-card add-card" onclick="openModal()">
+    <div class="add-icon">+</div>
+    <div class="add-label">내 PC 연결하기</div>
+  </div>`;
   if (!agents || agents.length === 0) {
-    grid.innerHTML = '<div class="no-agents">등록된 에이전트가 없습니다</div>';
+    grid.innerHTML = addCard;
     return;
   }
   grid.innerHTML = agents.map(a => {
@@ -316,7 +515,7 @@ function renderAgents(agents) {
     const skills = (a.skills || []).map(s => `<span class="tag">${esc(s)}</span>`).join('');
     const dataPaths = (a.data_paths || []).map(d => `<span class="tag data">${esc(d)}</span>`).join('');
     const mcpServers = (a.mcp_servers || []).map(m => `<span class="tag mcp">${esc(m)}</span>`).join('');
-    return `<div class="agent-card">
+    return `<div class="agent-card" onclick='openEditModal(${JSON.stringify(a).replace(/'/g,"&#39;")})'>
       ${statusText ? `<span class="agent-status-text ${statusCls}">${statusText}</span>` : ''}
       <div class="agent-name"><span class="agent-dot ${dotCls}"></span>${esc(a.name)}</div>
       <div class="agent-url">${esc(a.url || '')}</div>
@@ -324,7 +523,145 @@ function renderAgents(agents) {
       ${dataPaths ? `<div class="section-label">Data</div><div class="tag-row">${dataPaths}</div>` : ''}
       ${mcpServers ? `<div class="section-label">MCP</div><div class="tag-row">${mcpServers}</div>` : ''}
     </div>`;
-  }).join('');
+  }).join('') + addCard;
+}
+
+// --- Modal ---
+function openModal() { $('connectModal').classList.add('open'); }
+function closeModal() {
+  $('connectModal').classList.remove('open');
+  $('regResult').className = 'form-result';
+  $('regResult').textContent = '';
+}
+function switchModalTab(tab) {
+  document.querySelectorAll('.modal-tab').forEach((t,i) => {
+    t.classList.toggle('active', (tab==='register'?0:1)===i);
+  });
+  $('panelRegister').classList.toggle('active', tab==='register');
+  $('panelSetup').classList.toggle('active', tab==='setup');
+}
+async function registerAgent() {
+  const name = $('regName').value.trim();
+  const url = $('regUrl').value.trim();
+  const desc = $('regDesc').value.trim();
+  const skills = $('regSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const dataPaths = $('regData').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const mcpServers = $('regMcp').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const result = $('regResult');
+
+  if (!name || !url) {
+    result.className = 'form-result error';
+    result.textContent = '에이전트 이름과 터널 URL은 필수입니다.';
+    return;
+  }
+
+  $('btnRegister').disabled = true;
+  $('btnRegister').textContent = '등록 중...';
+
+  try {
+    const res = await fetch('/agents/register', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name, url, description: desc, skills, data_paths: dataPaths, mcp_servers: mcpServers})
+    });
+    const data = await res.json();
+    if (res.ok) {
+      result.className = 'form-result success';
+      result.textContent = data.message || '등록 완료!';
+      loadAgents();
+      setTimeout(() => { runHealthcheck(); }, 2000);
+      setTimeout(() => { closeModal(); }, 3000);
+    } else {
+      result.className = 'form-result error';
+      result.textContent = data.error || '등록 실패';
+    }
+  } catch (e) {
+    result.className = 'form-result error';
+    result.textContent = '오류: ' + e.message;
+  } finally {
+    $('btnRegister').disabled = false;
+    $('btnRegister').textContent = '등록하기';
+  }
+}
+function copyText(el) {
+  const text = el.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const toast = $('copiedToast');
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 1500);
+  });
+}
+
+// --- Edit Agent Modal ---
+function openEditModal(agent) {
+  $('editOrigName').value = agent.name;
+  $('editName').value = agent.name;
+  $('editUrl').value = agent.url || '';
+  $('editDesc').value = agent.description || '';
+  $('editSkills').value = (agent.skills || []).join(',');
+  $('editData').value = (agent.data_paths || []).join(',');
+  $('editMcp').value = (agent.mcp_servers || []).join(',');
+  $('editTitle').textContent = agent.name + ' 수정';
+  $('editResult').className = 'form-result';
+  $('editResult').textContent = '';
+  $('editModal').classList.add('open');
+}
+function closeEditModal() {
+  $('editModal').classList.remove('open');
+}
+async function saveAgent() {
+  const name = $('editOrigName').value;
+  const url = $('editUrl').value;
+  const desc = $('editDesc').value.trim();
+  const skills = $('editSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const dataPaths = $('editData').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const mcpServers = $('editMcp').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const result = $('editResult');
+
+  $('btnSave').disabled = true;
+  $('btnSave').textContent = '저장 중...';
+  try {
+    const res = await fetch('/agents/register', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({name, url, description: desc, skills, data_paths: dataPaths, mcp_servers: mcpServers})
+    });
+    const data = await res.json();
+    if (res.ok) {
+      result.className = 'form-result success';
+      result.textContent = data.message || '저장 완료!';
+      loadAgents();
+      setTimeout(closeEditModal, 1500);
+    } else {
+      result.className = 'form-result error';
+      result.textContent = data.error || '저장 실패';
+    }
+  } catch (e) {
+    result.className = 'form-result error';
+    result.textContent = '오류: ' + e.message;
+  } finally {
+    $('btnSave').disabled = false;
+    $('btnSave').textContent = '저장';
+  }
+}
+async function deleteAgent() {
+  const name = $('editOrigName').value;
+  if (!confirm(`'${name}' 에이전트를 삭제하시겠습니까?`)) return;
+  $('btnDelete').disabled = true;
+  try {
+    const res = await fetch('/agents/' + encodeURIComponent(name), {method:'DELETE'});
+    const data = await res.json();
+    if (res.ok) {
+      loadAgents();
+      closeEditModal();
+    } else {
+      $('editResult').className = 'form-result error';
+      $('editResult').textContent = data.error || '삭제 실패';
+    }
+  } catch (e) {
+    $('editResult').className = 'form-result error';
+    $('editResult').textContent = '오류: ' + e.message;
+  } finally {
+    $('btnDelete').disabled = false;
+  }
 }
 
 // --- Healthcheck ---

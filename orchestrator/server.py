@@ -165,6 +165,17 @@ async def list_agents(request: Request) -> JSONResponse:
     })
 
 
+# REST API: 에이전트 삭제
+async def delete_agent(request: Request) -> JSONResponse:
+    cfg: OrchestratorConfig = request.app.state.config
+    name = request.path_params["name"]
+    for i, agent in enumerate(cfg.registered_agents):
+        if agent.name == name:
+            cfg.registered_agents.pop(i)
+            return JSONResponse({"message": f"에이전트 '{name}' 삭제 완료"})
+    return JSONResponse({"error": f"에이전트 '{name}'을 찾을 수 없습니다"}, status_code=404)
+
+
 # REST API: 토론 직접 시작
 async def start_debate(request: Request) -> JSONResponse:
     cfg: OrchestratorConfig = request.app.state.config
@@ -327,6 +338,7 @@ def create_app(config: OrchestratorConfig) -> Starlette:
         Route("/agents/register", register_agent, methods=["POST"]),
         Route("/agents", list_agents, methods=["GET"]),
         Route("/agents/health", healthcheck_agents, methods=["GET"]),
+        Route("/agents/{name}", delete_agent, methods=["DELETE"]),
         Route("/reports", list_reports, methods=["GET"]),
         Route("/debate", start_debate, methods=["POST"]),
         Route("/query", skill_query, methods=["POST"]),
