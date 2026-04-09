@@ -28,9 +28,11 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route, Mount
+from starlette.staticfiles import StaticFiles
+from starlette.responses import StreamingResponse, HTMLResponse
 
 from config import load_config, OrchestratorConfig
-from orchestrator_agent import run_debate, select_agents_for_topic, call_agent
+from orchestrator_agent import run_debate, run_debate_streaming, select_agents_for_topic, call_agent
 
 
 def _extract_user_text(context: RequestContext) -> str:
@@ -205,6 +207,54 @@ async def skill_query(request: Request) -> JSONResponse:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# SSE 스트리밍 토론
+async def stream_debate(request: Request):
+    cfg: OrchestratorConfig = request.app.state.config
+    topic = request.query_params.get("topic", "")
+    if not topic:
+        return JSONResponse({"error": "topic 파라미터가 필요합니다"}, status_code=400)
+
+    async def event_generator():
+        queue = asyncio.Queue()
+
+        async def callback(event_type: str, data: dict):
+            await queue.put((event_type, data))
+
+        async def run():
+            try:
+                await run_debate_streaming(cfg, topic, callback)
+            except Exception as e:
+                await queue.put(("error", {"message": str(e)}))
+            finally:
+                await queue.put(None)  # sentinel
+
+        task = asyncio.create_task(run())
+
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                event_type, data = item
+                yield f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+        except asyncio.CancelledError:
+            task.cancel()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# 대시보드 페이지
+async def dashboard(request: Request):
+    import os
+    html_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
+    with open(html_path, "r", encoding="utf-8") as f:
+        return HTMLResponse(f.read())
+
+
 def create_app(config: OrchestratorConfig) -> Starlette:
     executor = OrchestratorExecutor(config)
     agent_card = build_agent_card(config)
@@ -219,6 +269,8 @@ def create_app(config: OrchestratorConfig) -> Starlette:
 
     # A2A 앱에 REST 라우트 추가
     extra_routes = [
+        Route("/dashboard", dashboard, methods=["GET"]),
+        Route("/stream/debate", stream_debate, methods=["GET"]),
         Route("/agents/register", register_agent, methods=["POST"]),
         Route("/agents", list_agents, methods=["GET"]),
         Route("/debate", start_debate, methods=["POST"]),

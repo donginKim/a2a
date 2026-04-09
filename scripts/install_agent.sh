@@ -55,25 +55,52 @@ echo "Python 패키지 설치 완료"
 echo "[6/6] 환경변수 파일 설정..."
 ENV_FILE="$AGENT_DIR/.env"
 if [ ! -f "$ENV_FILE" ]; then
-    # 사용자 입력
+    echo ""
+    echo "--- 에이전트 정보 입력 ---"
+    echo ""
+
     read -p "에이전트 이름 (예: 홍길동-agent): " AGENT_NAME
     AGENT_NAME=${AGENT_NAME:-"my-agent"}
 
-    read -p "GCP 오케스트레이터 IP 또는 URL (예: http://34.xx.xx.xx:8000): " ORCH_URL
+    read -p "에이전트 설명 (예: 데이터 분석 전문 에이전트): " AGENT_DESC
+    AGENT_DESC=${AGENT_DESC:-"${AGENT_NAME}의 Claude 기반 A2A 에이전트"}
+
+    read -p "GCP 오케스트레이터 URL (예: http://35.224.189.143:8000): " ORCH_URL
     ORCH_URL=${ORCH_URL:-"http://localhost:8000"}
 
     read -p "에이전트 포트 (기본: 8001): " AGENT_PORT
     AGENT_PORT=${AGENT_PORT:-8001}
 
+    echo ""
+    echo "--- 스킬 & 데이터 설정 ---"
+    echo ""
+
+    read -p "스킬셋 (쉼표 구분, 예: analysis,coding,finance): " AGENT_SKILLS
+    AGENT_SKILLS=${AGENT_SKILLS:-"general,analysis"}
+
+    read -p "참고할 데이터 경로 (쉼표 구분, 기본: agent/data): " AGENT_DATA_PATHS
+    AGENT_DATA_PATHS=${AGENT_DATA_PATHS:-"$AGENT_DIR/data"}
+
+    read -p "MCP 서버 (쉼표 구분, 없으면 Enter): " AGENT_MCP_SERVERS
+
     cat > "$ENV_FILE" << EOF
 AGENT_HOST=0.0.0.0
 AGENT_PORT=$AGENT_PORT
 AGENT_NAME=$AGENT_NAME
-AGENT_DESCRIPTION=${AGENT_NAME}의 Claude 기반 A2A 에이전트
+AGENT_DESCRIPTION="$AGENT_DESC"
 ORCHESTRATOR_URL=$ORCH_URL
 AGENT_PUBLIC_URL=
 DATA_DIR=$AGENT_DIR/data
 ALLOWED_TOOLS=Read,Glob,Grep
+
+# 스킬셋
+AGENT_SKILLS=$AGENT_SKILLS
+
+# 참고 데이터 경로
+AGENT_DATA_PATHS=$AGENT_DATA_PATHS
+
+# MCP 서버
+AGENT_MCP_SERVERS=$AGENT_MCP_SERVERS
 EOF
     echo ".env 파일 생성: $ENV_FILE"
 else
@@ -89,12 +116,11 @@ echo "=========================================="
 echo "설치 완료!"
 echo ""
 echo "다음 단계:"
-echo "1. Claude Code 로그인: claude"
-echo "2. 에이전트 + 터널 시작:"
-echo "   cd $PROJECT_DIR/tunnel"
-echo "   AGENT_DIR=$AGENT_DIR bash start_agent_with_tunnel.sh"
+echo "  1. Claude Code 로그인: claude"
+echo "  2. 참고할 데이터 파일을 $AGENT_DIR/data/ 에 넣기"
+echo "  3. 에이전트 + 터널 시작:"
+echo "     cd $PROJECT_DIR/tunnel"
+echo "     bash start_agent_with_tunnel.sh"
 echo ""
-echo "또는 수동으로:"
-echo "  터널: cloudflared tunnel --url http://localhost:8001"
-echo "  에이전트: cd $AGENT_DIR && source $VENV_DIR/bin/activate && python server.py"
+echo "대시보드 확인: http://<GCP_IP>:8000/dashboard"
 echo "=========================================="

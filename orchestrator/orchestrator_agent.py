@@ -141,6 +141,113 @@ async def select_agents_for_topic(
     return agents
 
 
+async def run_debate_streaming(
+    config: OrchestratorConfig,
+    topic: str,
+    event_callback,
+):
+    """
+    스트리밍 토론. event_callback(event_type, data_dict)를 호출하여 진행 상황을 전달합니다.
+    단일 에이전트면 바로 답변, 2개 이상이면 토론.
+    """
+    async with httpx.AsyncClient(timeout=120.0) as http_client:
+        agents = config.registered_agents
+        if any(a.skills for a in agents):
+            await event_callback("status", {"phase": "skill_matching", "message": "주제에 적합한 에이전트 선별 중..."})
+            agents = await select_agents_for_topic(agents, topic)
+        if not agents:
+            await event_callback("error", {"message": "등록된 에이전트가 없습니다."})
+            return
+
+        # 단일 에이전트: 바로 답변
+        if len(agents) == 1:
+            agent = agents[0]
+            await event_callback("status", {"phase": "single", "message": f"{agent.name}에게 질문 중..."})
+            response = await call_agent(http_client, agent, topic)
+            await event_callback("single_response", {"agent": agent.name, "response": response})
+            await event_callback("status", {"phase": "complete", "message": "완료"})
+            return
+
+        # 토론 모드
+        await event_callback("status", {
+            "phase": "start",
+            "message": f"토론 시작 - 에이전트 {len(agents)}개 참여: {', '.join(a.name for a in agents)}",
+        })
+
+        history = []
+
+        # 라운드 0: 초기 의견
+        await event_callback("status", {"phase": "round", "message": "라운드 0: 초기 의견 수집 중..."})
+        for agent in agents:
+            response = await call_agent(http_client, agent, topic)
+            await event_callback("opinion", {"agent": agent.name, "round": 0, "opinion": response})
+            history.append({"agent": agent.name, "round": 0, "opinion": response})
+
+        prev_opinions = {h["agent"]: h["opinion"] for h in history if h["round"] == 0}
+
+        # 라운드 1~N
+        for round_num in range(1, config.debate_rounds + 1):
+            await event_callback("status", {"phase": "round", "message": f"라운드 {round_num}: 토론 진행 중..."})
+            round_opinions = {}
+            for agent in agents:
+                others_context = "\n".join(
+                    f"- {name}: {opinion}"
+                    for name, opinion in prev_opinions.items()
+                    if name != agent.name
+                )
+                prompt = (
+                    f"주제: {topic}\n\n"
+                    f"다른 참여자들의 의견:\n{others_context}\n\n"
+                    f"위 의견들을 참고하여 당신의 심화된 견해를 제시해주세요. "
+                    f"동의하는 부분과 다른 관점이 있다면 구체적으로 설명해주세요."
+                )
+                response = await call_agent(http_client, agent, prompt)
+                await event_callback("opinion", {"agent": agent.name, "round": round_num, "opinion": response})
+                round_opinions[agent.name] = response
+            prev_opinions = round_opinions
+
+        # 보고서 생성
+        await event_callback("status", {"phase": "synthesizing", "message": "Claude가 최종 보고서 작성 중..."})
+
+        history_text = ""
+        all_opinions = {0: {h["agent"]: h["opinion"] for h in history if h["round"] == 0}}
+        for r in range(1, config.debate_rounds + 1):
+            all_opinions[r] = {}
+        # rebuild from callbacks - use prev_opinions trail
+        # Simpler: just build from what we have
+        history_text += "\n## 초기 의견\n"
+        for h in history:
+            if h["round"] == 0:
+                history_text += f"**{h['agent']}**: {h['opinion']}\n\n"
+
+        report_prompt = (
+            f"다음은 '{topic}'에 대한 멀티 에이전트 토론 내용입니다.\n\n"
+            f"{history_text}\n\n"
+            f"위 토론 내용을 바탕으로 다음 구조의 보고서를 작성해주세요:\n"
+            f"1. 핵심 요약\n"
+            f"2. 주요 합의 사항\n"
+            f"3. 쟁점 및 다양한 관점\n"
+            f"4. 결론 및 권고사항\n"
+        )
+
+        report = await synthesize_with_claude(report_prompt)
+
+        # 보고서 저장
+        output_dir = Path(config.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        report_path = output_dir / f"report_{timestamp}.md"
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write(f"# 토론 보고서: {topic}\n\n")
+            f.write(f"**생성일시**: {datetime.now().isoformat()}\n\n")
+            f.write(f"**참여 에이전트**: {', '.join(a.name for a in agents)}\n\n")
+            f.write("---\n\n")
+            f.write(report)
+
+        await event_callback("report", {"report": report, "report_path": str(report_path)})
+        await event_callback("status", {"phase": "complete", "message": "토론 완료"})
+
+
 async def run_single_query(
     http_client: httpx.AsyncClient,
     agent: AgentInfo,

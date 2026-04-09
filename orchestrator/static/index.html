@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A2A Orchestrator Dashboard</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0f1117;--surface:#1a1d27;--surface2:#242836;--border:#2e3348;
+    --text:#e4e6f0;--text-dim:#8b8fa3;--accent:#6c8cff;--accent-dim:#4a62b3;
+    --green:#34d399;--red:#f87171;--orange:#fbbf24;--purple:#a78bfa;
+    --radius:10px;--shadow:0 2px 12px rgba(0,0,0,.4);
+  }
+  html{font-size:15px}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+
+  /* layout */
+  .container{max-width:1200px;margin:0 auto;padding:1.2rem;display:grid;gap:1.2rem;grid-template-rows:auto auto 1fr}
+
+  /* header */
+  header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6rem}
+  header h1{font-size:1.4rem;font-weight:700;letter-spacing:-.02em}
+  header h1 span{color:var(--accent)}
+  .status-pill{display:flex;align-items:center;gap:.45rem;font-size:.8rem;padding:.3rem .75rem;border-radius:20px;background:var(--surface);border:1px solid var(--border)}
+  .status-dot{width:8px;height:8px;border-radius:50%;background:var(--red);transition:background .3s}
+  .status-dot.ok{background:var(--green)}
+  .status-dot.ok{animation:pulse-green 2s infinite}
+  @keyframes pulse-green{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,.4)}50%{box-shadow:0 0 0 6px rgba(52,211,153,0)}}
+
+  /* agents panel */
+  .agents-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;overflow-x:auto}
+  .agents-panel h2{font-size:.9rem;color:var(--text-dim);margin-bottom:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  .agents-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.7rem}
+  .agent-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem;transition:border-color .2s,transform .15s}
+  .agent-card:hover{border-color:var(--accent-dim);transform:translateY(-1px)}
+  .agent-name{font-weight:700;font-size:.95rem;margin-bottom:.35rem;display:flex;align-items:center;gap:.4rem}
+  .agent-name::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .agent-url{font-size:.72rem;color:var(--text-dim);margin-bottom:.45rem;word-break:break-all}
+  .tag-row{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.3rem}
+  .tag{font-size:.68rem;padding:.15rem .45rem;border-radius:4px;background:rgba(108,140,255,.15);color:var(--accent);border:1px solid rgba(108,140,255,.2)}
+  .tag.mcp{background:rgba(167,139,250,.15);color:var(--purple);border-color:rgba(167,139,250,.2)}
+  .tag.data{background:rgba(251,191,36,.15);color:var(--orange);border-color:rgba(251,191,36,.2)}
+  .section-label{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:.25rem;margin-bottom:.15rem}
+  .no-agents{color:var(--text-dim);font-size:.85rem;text-align:center;padding:1.5rem}
+
+  /* input section */
+  .input-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem}
+  .input-section h2{font-size:.9rem;color:var(--text-dim);margin-bottom:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  .input-row{display:flex;gap:.6rem;flex-wrap:wrap}
+  .input-row input{flex:1;min-width:200px;padding:.6rem .9rem;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.9rem;outline:none;transition:border-color .2s}
+  .input-row input:focus{border-color:var(--accent)}
+  .input-row input::placeholder{color:var(--text-dim)}
+  .btn{padding:.6rem 1.2rem;border-radius:8px;border:none;font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover:not(:disabled){background:#5a7aee;transform:translateY(-1px)}
+  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+  .btn-secondary:hover:not(:disabled){background:var(--border);transform:translateY(-1px)}
+
+  /* output section */
+  .output-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;display:flex;flex-direction:column;min-height:350px;max-height:calc(100vh - 400px);overflow:hidden}
+  .output-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.7rem}
+  .output-header h2{font-size:.9rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  .btn-clear{font-size:.72rem;padding:.25rem .6rem;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer}
+  .btn-clear:hover{color:var(--text);border-color:var(--text-dim)}
+  .output-body{flex:1;overflow-y:auto;padding-right:.3rem;scroll-behavior:smooth}
+  .output-body::-webkit-scrollbar{width:5px}
+  .output-body::-webkit-scrollbar-track{background:transparent}
+  .output-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+  /* output items */
+  .out-item{margin-bottom:.7rem;animation:fadeIn .3s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  .out-status{display:flex;align-items:center;gap:.5rem;padding:.5rem .7rem;border-radius:6px;background:rgba(108,140,255,.08);border-left:3px solid var(--accent);font-size:.82rem;color:var(--accent)}
+  .out-status.phase-complete{border-left-color:var(--green);color:var(--green);background:rgba(52,211,153,.08)}
+  .out-status.phase-error{border-left-color:var(--red);color:var(--red);background:rgba(248,113,113,.08)}
+  .out-opinion{padding:.6rem .8rem;border-radius:6px;background:var(--surface2);border:1px solid var(--border)}
+  .out-opinion .agent-label{font-size:.75rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;display:flex;align-items:center;gap:.35rem}
+  .out-opinion .agent-label .round-tag{font-size:.65rem;color:var(--text-dim);font-weight:400;background:var(--surface);padding:.1rem .35rem;border-radius:3px}
+  .out-opinion .opinion-text{font-size:.83rem;line-height:1.65;color:var(--text)}
+  .out-report{padding:.8rem;border-radius:6px;background:var(--surface2);border:1px solid var(--green);border-left:3px solid var(--green)}
+  .out-report .report-label{font-size:.75rem;font-weight:700;color:var(--green);margin-bottom:.5rem}
+  .out-report .report-path{font-size:.7rem;color:var(--text-dim);margin-top:.5rem}
+  .out-response{padding:.8rem;border-radius:6px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent)}
+  .out-response .resp-agent{font-size:.75rem;font-weight:700;color:var(--accent);margin-bottom:.4rem}
+
+  /* markdown rendered content */
+  .md h1,.md h2,.md h3{margin:1em 0 .4em;font-weight:700}
+  .md h1{font-size:1.25em;color:var(--accent)}
+  .md h2{font-size:1.1em;color:var(--accent)}
+  .md h3{font-size:1em;color:var(--text)}
+  .md p{margin:.4em 0}
+  .md ul,.md ol{margin:.4em 0 .4em 1.4em}
+  .md li{margin:.15em 0}
+  .md code{background:rgba(108,140,255,.1);color:var(--accent);padding:.12em .35em;border-radius:3px;font-size:.88em;font-family:'SF Mono',Consolas,monospace}
+  .md pre{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.7em;overflow-x:auto;margin:.5em 0}
+  .md pre code{background:none;padding:0;color:var(--text)}
+  .md blockquote{border-left:3px solid var(--border);padding-left:.7em;color:var(--text-dim);margin:.5em 0}
+  .md strong{color:#fff;font-weight:700}
+  .md em{color:var(--text-dim);font-style:italic}
+  .md hr{border:none;border-top:1px solid var(--border);margin:.8em 0}
+  .md table{border-collapse:collapse;width:100%;margin:.5em 0;font-size:.88em}
+  .md th,.md td{border:1px solid var(--border);padding:.35em .6em;text-align:left}
+  .md th{background:var(--surface);font-weight:600}
+
+  /* loading spinner */
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .loading-bar{height:2px;background:linear-gradient(90deg,var(--accent),var(--purple),var(--accent));background-size:200% 100%;animation:shimmer 1.5s ease infinite;border-radius:1px;margin-bottom:.5rem;display:none}
+  .loading-bar.active{display:block}
+  @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-dim);gap:.5rem;font-size:.85rem;text-align:center;padding:2rem}
+  .empty-state .icon{font-size:2rem;opacity:.4}
+
+  @media(max-width:640px){
+    .container{padding:.7rem;gap:.7rem}
+    .input-row{flex-direction:column}
+    .input-row input{min-width:0}
+    .btn{width:100%}
+    .agents-grid{grid-template-columns:1fr}
+    .output-section{max-height:none;min-height:250px}
+    header h1{font-size:1.15rem}
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Header -->
+  <header>
+    <h1><span>A2A</span> Orchestrator</h1>
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">연결 확인 중...</span>
+    </div>
+  </header>
+
+  <!-- Agents Panel -->
+  <section class="agents-panel">
+    <h2>등록된 에이전트</h2>
+    <div class="agents-grid" id="agentsGrid">
+      <div class="no-agents">에이전트를 불러오는 중...</div>
+    </div>
+  </section>
+
+  <!-- Input Section -->
+  <section class="input-section">
+    <h2>주제 입력</h2>
+    <div class="input-row">
+      <input type="text" id="topicInput" placeholder="토론 주제 또는 질문을 입력하세요..." autocomplete="off">
+      <button class="btn btn-secondary" id="btnQuery" onclick="doQuery()">질문하기</button>
+      <button class="btn btn-primary" id="btnDebate" onclick="doDebate()">토론 시작</button>
+    </div>
+  </section>
+
+  <!-- Output Section -->
+  <section class="output-section">
+    <div class="output-header">
+      <h2>결과</h2>
+      <button class="btn-clear" onclick="clearOutput()">지우기</button>
+    </div>
+    <div class="loading-bar" id="loadingBar"></div>
+    <div class="output-body" id="outputBody">
+      <div class="empty-state">
+        <div class="icon">&#x1F4AC;</div>
+        <div>주제를 입력하고 질문하기 또는 토론 시작을 눌러주세요</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+// --- Simple markdown renderer ---
+function renderMd(text) {
+  if (!text) return '';
+  let html = text
+    // escape html
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // code blocks
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code.trim()}</code></pre>`)
+    // inline code
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    // headings
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    // bold & italic
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // hr
+    .replace(/^---+$/gm, '<hr>')
+    // blockquote
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+    // unordered list
+    .replace(/^[\-\*] (.+)$/gm, '<li>$1</li>')
+    // ordered list
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    // table support (simple)
+    .replace(/^\|(.+)\|$/gm, (match, inner) => {
+      const cells = inner.split('|').map(c => c.trim());
+      if (cells.every(c => /^[\-:]+$/.test(c))) return '<!--sep-->';
+      return '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
+    });
+
+  // wrap consecutive <li> in <ul>
+  html = html.replace(/((?:<li>.*<\/li>\s*)+)/g, '<ul>$1</ul>');
+  // wrap consecutive <tr> in <table>
+  html = html.replace(/<!--sep-->/g, '');
+  html = html.replace(/((?:<tr>.*<\/tr>\s*)+)/g, '<table>$1</table>');
+  // first row as th
+  html = html.replace(/<table><tr>(.*?)<\/tr>/, (_, row) =>
+    '<table><tr>' + row.replace(/<td>/g, '<th>').replace(/<\/td>/g, '</th>') + '</tr>'
+  );
+  // paragraphs: wrap remaining loose text lines
+  html = html.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return '';
+    if (/^<[a-z]/.test(trimmed)) return trimmed;
+    return `<p>${trimmed}</p>`;
+  }).join('\n');
+
+  return html;
+}
+
+// --- State ---
+let eventSource = null;
+let busy = false;
+let connected = false;
+
+const $ = id => document.getElementById(id);
+const outputBody = $('outputBody');
+
+function setConnected(ok) {
+  connected = ok;
+  $('statusDot').className = 'status-dot' + (ok ? ' ok' : '');
+  $('statusText').textContent = ok ? '연결됨' : '연결 끊김';
+}
+
+function setBusy(b) {
+  busy = b;
+  $('btnQuery').disabled = b;
+  $('btnDebate').disabled = b;
+  $('topicInput').disabled = b;
+  $('loadingBar').className = 'loading-bar' + (b ? ' active' : '');
+}
+
+function clearOutput() {
+  outputBody.innerHTML = '<div class="empty-state"><div class="icon">&#x1F4AC;</div><div>주제를 입력하고 질문하기 또는 토론 시작을 눌러주세요</div></div>';
+  closeSSE();
+}
+
+function appendItem(html) {
+  // remove empty state if present
+  const empty = outputBody.querySelector('.empty-state');
+  if (empty) empty.remove();
+  const div = document.createElement('div');
+  div.className = 'out-item';
+  div.innerHTML = html;
+  outputBody.appendChild(div);
+  outputBody.scrollTop = outputBody.scrollHeight;
+}
+
+function closeSSE() {
+  if (eventSource) { eventSource.close(); eventSource = null; }
+  setBusy(false);
+}
+
+// --- Agents ---
+async function loadAgents() {
+  try {
+    const res = await fetch('/agents');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    setConnected(true);
+    renderAgents(data.agents || data);
+  } catch (e) {
+    setConnected(false);
+  }
+}
+
+function renderAgents(agents) {
+  const grid = $('agentsGrid');
+  if (!agents || agents.length === 0) {
+    grid.innerHTML = '<div class="no-agents">등록된 에이전트가 없습니다</div>';
+    return;
+  }
+  grid.innerHTML = agents.map(a => {
+    const skills = (a.skills || []).map(s => `<span class="tag">${esc(s)}</span>`).join('');
+    const dataPaths = (a.data_paths || []).map(d => `<span class="tag data">${esc(d)}</span>`).join('');
+    const mcpServers = (a.mcp_servers || []).map(m => `<span class="tag mcp">${esc(m)}</span>`).join('');
+    return `<div class="agent-card">
+      <div class="agent-name">${esc(a.name || a.agent_name || 'Unknown')}</div>
+      <div class="agent-url">${esc(a.url || a.endpoint || '')}</div>
+      ${skills ? `<div class="section-label">Skills</div><div class="tag-row">${skills}</div>` : ''}
+      ${dataPaths ? `<div class="section-label">Data Paths</div><div class="tag-row">${dataPaths}</div>` : ''}
+      ${mcpServers ? `<div class="section-label">MCP Servers</div><div class="tag-row">${mcpServers}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// --- Query (single) ---
+async function doQuery() {
+  const topic = $('topicInput').value.trim();
+  if (!topic) { $('topicInput').focus(); return; }
+  clearEmptyState();
+  setBusy(true);
+  appendItem(`<div class="out-status">질문 전송 중... <span class="spinner"></span></div>`);
+
+  try {
+    const res = await fetch('/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({topic})
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    // support various response shapes
+    if (data.responses) {
+      data.responses.forEach(r => {
+        appendItem(`<div class="out-response"><div class="resp-agent">${esc(r.agent || '')}</div><div class="md">${renderMd(r.response || r.text || JSON.stringify(r))}</div></div>`);
+      });
+    } else if (data.response) {
+      appendItem(`<div class="out-response"><div class="resp-agent">${esc(data.agent || '응답')}</div><div class="md">${renderMd(data.response)}</div></div>`);
+    } else {
+      appendItem(`<div class="out-response"><div class="md">${renderMd(JSON.stringify(data, null, 2))}</div></div>`);
+    }
+  } catch (e) {
+    appendItem(`<div class="out-status phase-error">오류: ${esc(e.message)}</div>`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+// --- Debate (SSE) ---
+function doDebate() {
+  const topic = $('topicInput').value.trim();
+  if (!topic) { $('topicInput').focus(); return; }
+  clearEmptyState();
+  closeSSE();
+  setBusy(true);
+  appendItem(`<div class="out-status">토론을 시작합니다... <span class="spinner"></span></div>`);
+
+  const url = '/stream/debate?topic=' + encodeURIComponent(topic);
+  eventSource = new EventSource(url);
+
+  eventSource.addEventListener('status', e => {
+    const d = JSON.parse(e.data);
+    const cls = d.phase === 'complete' ? ' phase-complete' : d.phase === 'error' ? ' phase-error' : '';
+    appendItem(`<div class="out-status${cls}">${esc(d.message)}</div>`);
+    if (d.phase === 'complete') closeSSE();
+  });
+
+  eventSource.addEventListener('opinion', e => {
+    const d = JSON.parse(e.data);
+    appendItem(`<div class="out-opinion">
+      <div class="agent-label">${esc(d.agent)} <span class="round-tag">Round ${d.round + 1}</span></div>
+      <div class="opinion-text md">${renderMd(d.opinion)}</div>
+    </div>`);
+  });
+
+  eventSource.addEventListener('report', e => {
+    const d = JSON.parse(e.data);
+    appendItem(`<div class="out-report">
+      <div class="report-label">최종 보고서</div>
+      <div class="md">${renderMd(d.report)}</div>
+      ${d.report_path ? `<div class="report-path">저장 경로: ${esc(d.report_path)}</div>` : ''}
+    </div>`);
+  });
+
+  eventSource.addEventListener('single_response', e => {
+    const d = JSON.parse(e.data);
+    appendItem(`<div class="out-response">
+      <div class="resp-agent">${esc(d.agent)}</div>
+      <div class="md">${renderMd(d.response)}</div>
+    </div>`);
+  });
+
+  eventSource.addEventListener('error', e => {
+    try {
+      const d = JSON.parse(e.data);
+      appendItem(`<div class="out-status phase-error">오류: ${esc(d.message)}</div>`);
+    } catch (_) {
+      appendItem(`<div class="out-status phase-error">SSE 연결 오류</div>`);
+    }
+    closeSSE();
+  });
+
+  eventSource.onerror = () => {
+    if (eventSource && eventSource.readyState === EventSource.CLOSED) {
+      closeSSE();
+    }
+  };
+}
+
+function clearEmptyState() {
+  const empty = outputBody.querySelector('.empty-state');
+  if (empty) empty.remove();
+}
+
+// --- Enter key ---
+$('topicInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey && !busy) {
+    e.preventDefault();
+    doDebate();
+  }
+});
+
+// --- Init ---
+loadAgents();
+setInterval(loadAgents, 10000);
+</script>
+</body>
+</html>
