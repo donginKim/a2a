@@ -62,7 +62,7 @@ fi
 echo "에이전트 시작 중..."
 cd "$AGENT_DIR"
 export AGENT_PUBLIC_URL="$TUNNEL_URL"
-[ -f .env ] && export $(grep -v '^#' .env | xargs)
+[ -f .env ] && set -a && source .env && set +a
 
 python server.py &
 AGENT_PID=$!

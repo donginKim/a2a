@@ -6,7 +6,7 @@ import os
 import json
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import Dict, List
 
 
 @dataclass
@@ -14,6 +14,7 @@ class AgentInfo:
     name: str
     url: str
     description: str = ""
+    skills: List[str] = field(default_factory=list)
 
 
 @dataclass

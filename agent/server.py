@@ -126,10 +126,7 @@ def main():
     app = a2a_app.build()
 
     # 시작 시 오케스트레이터 등록
-    async def on_startup():
-        await register_with_orchestrator(config)
-
-    app.router.on_startup.append(on_startup)
+    asyncio.get_event_loop().run_until_complete(register_with_orchestrator(config))
 
     uvicorn.run(app, host=config.host, port=config.port, log_level="info")
 

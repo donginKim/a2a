@@ -7,6 +7,7 @@
 import asyncio
 import json
 import sys
+import httpx
 import uvicorn
 
 from a2a.server.apps import A2AStarletteApplication
@@ -29,7 +30,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route, Mount
 
 from config import load_config, OrchestratorConfig
-from orchestrator_agent import run_debate
+from orchestrator_agent import run_debate, select_agents_for_topic, call_agent
 
 
 def _extract_user_text(context: RequestContext) -> str:
@@ -116,6 +117,7 @@ async def register_agent(request: Request) -> JSONResponse:
         name = body.get("name")
         url = body.get("url")
         description = body.get("description", "")
+        skills = body.get("skills", [])
         if not name or not url:
             return JSONResponse({"error": "name과 url은 필수입니다"}, status_code=400)
 
@@ -124,10 +126,11 @@ async def register_agent(request: Request) -> JSONResponse:
             if agent.name == name:
                 agent.url = url
                 agent.description = description
-                return JSONResponse({"message": f"에이전트 '{name}' 업데이트 완료", "url": url})
+                agent.skills = skills
+                return JSONResponse({"message": f"에이전트 '{name}' 업데이트 완료", "url": url, "skills": skills})
 
         from config import AgentInfo
-        cfg.registered_agents.append(AgentInfo(name=name, url=url, description=description))
+        cfg.registered_agents.append(AgentInfo(name=name, url=url, description=description, skills=skills))
         return JSONResponse({"message": f"에이전트 '{name}' 등록 완료", "url": url})
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -138,7 +141,7 @@ async def list_agents(request: Request) -> JSONResponse:
     cfg: OrchestratorConfig = request.app.state.config
     return JSONResponse({
         "agents": [
-            {"name": a.name, "url": a.url, "description": a.description}
+            {"name": a.name, "url": a.url, "description": a.description, "skills": a.skills}
             for a in cfg.registered_agents
         ]
     })
@@ -154,6 +157,36 @@ async def start_debate(request: Request) -> JSONResponse:
             return JSONResponse({"error": "topic은 필수입니다"}, status_code=400)
         result = await run_debate(cfg, topic)
         return JSONResponse(result)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# REST API: 스킬 기반 단일 쿼리 (가장 적합한 에이전트 1개에 요청)
+async def skill_query(request: Request) -> JSONResponse:
+    cfg: OrchestratorConfig = request.app.state.config
+    try:
+        body = await request.json()
+        topic = body.get("topic")
+        if not topic:
+            return JSONResponse({"error": "topic은 필수입니다"}, status_code=400)
+
+        agents = cfg.registered_agents
+        if not agents:
+            return JSONResponse({"error": "등록된 에이전트가 없습니다"}, status_code=400)
+
+        # 스킬 매칭으로 최적 에이전트 선택
+        selected = await select_agents_for_topic(agents, topic, min_agents=1)
+        best_agent = selected[0]
+
+        async with httpx.AsyncClient(timeout=120.0) as http_client:
+            result = await call_agent(http_client, best_agent, topic)
+
+        return JSONResponse({
+            "topic": topic,
+            "selected_agent": best_agent.name,
+            "all_candidates": [a.name for a in selected],
+            "response": result,
+        })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -175,6 +208,7 @@ def create_app(config: OrchestratorConfig) -> Starlette:
         Route("/agents/register", register_agent, methods=["POST"]),
         Route("/agents", list_agents, methods=["GET"]),
         Route("/debate", start_debate, methods=["POST"]),
+        Route("/query", skill_query, methods=["POST"]),
     ]
 
     app = Starlette(

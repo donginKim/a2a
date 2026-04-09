@@ -3,7 +3,8 @@
     {
       "name": "my-agent",
       "url": "http://localhost:8001",
-      "description": "내 로컬 에이전트"
+      "description": "내 로컬 에이전트",
+      "skills": ["general", "analysis"]
     }
   ]
 }

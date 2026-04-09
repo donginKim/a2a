@@ -6,10 +6,11 @@
 """
 import asyncio
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 import httpx
 from a2a.client import A2AClient
@@ -103,9 +104,49 @@ async def synthesize_with_claude(prompt: str) -> str:
     return result_text or "(합성 실패)"
 
 
+async def select_agents_for_topic(
+    agents: List[AgentInfo],
+    topic: str,
+    min_agents: int = 1,
+) -> List[AgentInfo]:
+    """주제에 가장 적합한 에이전트를 Claude로 선별합니다."""
+    # 스킬이 정의된 에이전트가 없으면 전체 반환
+    if not any(a.skills for a in agents):
+        return agents
+
+    agents_desc = "\n".join(
+        f'- name: "{a.name}", description: "{a.description}", skills: {a.skills}'
+        for a in agents
+    )
+    prompt = (
+        f"다음 주제와 에이전트 목록을 보고, 주제에 가장 적합한 에이전트를 선택하세요.\n\n"
+        f"주제: {topic}\n\n"
+        f"에이전트 목록:\n{agents_desc}\n\n"
+        f"반드시 JSON 배열로만 응답하세요. 에이전트 이름만 포함합니다.\n"
+        f'예시: ["agent-a", "agent-b"]\n'
+        f"적합한 에이전트가 없으면 모든 에이전트를 포함하세요."
+    )
+
+    try:
+        response = await synthesize_with_claude(prompt)
+        # JSON 배열 추출
+        match = re.search(r'\[.*?\]', response, re.DOTALL)
+        if match:
+            selected_names = json.loads(match.group())
+            selected = [a for a in agents if a.name in selected_names]
+            if len(selected) >= min_agents:
+                print(f"  스킬 매칭 결과: {[a.name for a in selected]}")
+                return selected
+    except Exception as e:
+        print(f"  스킬 매칭 실패 (전체 에이전트 사용): {e}")
+
+    return agents
+
+
 async def run_debate(
     config: OrchestratorConfig,
     topic: str,
+    select_by_skill: bool = True,
 ) -> Dict:
     """
     토론을 진행하고 최종 보고서를 반환합니다.
@@ -119,6 +160,9 @@ async def run_debate(
 
     async with httpx.AsyncClient(timeout=120.0) as http_client:
         agents = config.registered_agents
+        if select_by_skill and any(a.skills for a in agents):
+            print("[스킬 매칭] 주제에 적합한 에이전트 선별 중...")
+            agents = await select_agents_for_topic(agents, topic)
         if not agents:
             return {"error": "등록된 에이전트가 없습니다. agents.json을 확인하세요."}
 
