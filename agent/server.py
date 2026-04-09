@@ -58,6 +58,8 @@ def build_agent_card(config: AgentConfig) -> AgentCard:
         description=config.description,
         url=f"{public_url}/",
         version="1.0.0",
+        defaultInputModes=["text"],
+        defaultOutputModes=["text"],
         capabilities=AgentCapabilities(streaming=True),
         skills=[
             AgentSkill(
@@ -67,6 +69,7 @@ def build_agent_card(config: AgentConfig) -> AgentCard:
                     "로컬 데이터를 기반으로 주어진 주제에 대한 "
                     "분석과 의견을 제시합니다."
                 ),
+                tags=["analysis", "data", "opinion"],
                 examples=[
                     "이 주제에 대한 당신의 견해는?",
                     "데이터를 분석하고 인사이트를 제공해주세요",

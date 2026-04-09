@@ -87,6 +87,8 @@ def build_agent_card(config: OrchestratorConfig) -> AgentCard:
         description=config.description,
         url=f"http://{config.host}:{config.port}/",
         version="1.0.0",
+        defaultInputModes=["text"],
+        defaultOutputModes=["text"],
         capabilities=AgentCapabilities(streaming=True),
         skills=[
             AgentSkill(
@@ -96,6 +98,7 @@ def build_agent_card(config: OrchestratorConfig) -> AgentCard:
                     "여러 에이전트가 주어진 주제에 대해 토론하고 "
                     "최종 보고서를 생성합니다."
                 ),
+                tags=["debate", "multi-agent", "analysis"],
                 examples=[
                     "AI 윤리에 대한 다양한 관점을 토론해주세요",
                     "클라우드 vs 온프레미스 아키텍처의 장단점을 분석해주세요",
