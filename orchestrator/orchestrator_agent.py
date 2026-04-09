@@ -141,18 +141,56 @@ async def select_agents_for_topic(
     return agents
 
 
+async def run_single_query(
+    http_client: httpx.AsyncClient,
+    agent: AgentInfo,
+    topic: str,
+) -> Dict:
+    """단일 에이전트에게 바로 질문하고 답변을 반환합니다."""
+    print(f"\n{'='*60}")
+    print(f"단일 에이전트 질문: {topic}")
+    print(f"담당 에이전트: {agent.name}")
+    if agent.skills:
+        print(f"스킬: {agent.skills}")
+    if agent.data_paths:
+        print(f"데이터 경로: {agent.data_paths}")
+    if agent.mcp_servers:
+        print(f"MCP 서버: {agent.mcp_servers}")
+    print(f"{'='*60}\n")
+
+    response = await call_agent(http_client, agent, topic)
+
+    # 결과 저장
+    output_dir = Path("./reports")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = output_dir / f"query_{timestamp}.md"
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(f"# 질문: {topic}\n\n")
+        f.write(f"**생성일시**: {datetime.now().isoformat()}\n\n")
+        f.write(f"**담당 에이전트**: {agent.name}\n\n")
+        f.write("---\n\n")
+        f.write(response)
+
+    print(f"응답 저장 완료: {report_path}")
+    return {
+        "topic": topic,
+        "mode": "single",
+        "agent": agent.name,
+        "response": response,
+        "report_path": str(report_path),
+    }
+
+
 async def run_debate(
     config: OrchestratorConfig,
     topic: str,
     select_by_skill: bool = True,
 ) -> Dict:
     """
-    토론을 진행하고 최종 보고서를 반환합니다.
-
-    흐름:
-    1. 각 에이전트에게 초기 의견 요청
-    2. N라운드 토론 (상대 의견 보여주고 반론 요청)
-    3. Claude가 전체 토론 취합 후 보고서 생성
+    에이전트 수에 따라 자동으로 모드를 결정합니다.
+    - 1개: 바로 답변 (토론 없음)
+    - 2개+: 토론 후 보고서 생성
     """
     history = []
 
@@ -162,9 +200,16 @@ async def run_debate(
             print("[스킬 매칭] 주제에 적합한 에이전트 선별 중...")
             agents = await select_agents_for_topic(agents, topic)
         if not agents:
-            return {"error": "등록된 에이전트가 없습니다. agents.json을 확인하세요."}
+            return {"error": "등록된 에이전트가 없습니다."}
 
+        # 단일 에이전트: 토론 없이 바로 답변
+        if len(agents) == 1:
+            print("[단일 에이전트 모드] 토론 없이 바로 답변합니다.")
+            return await run_single_query(http_client, agents[0], topic)
+
+        # 2개 이상: 토론 모드
         print(f"\n{'='*60}")
+        print(f"[토론 모드] 에이전트 {len(agents)}개 참여")
         print(f"토론 주제: {topic}")
         print(f"참여 에이전트: {[a.name for a in agents]}")
         print(f"{'='*60}\n")
@@ -181,7 +226,6 @@ async def run_debate(
             print(f"\n[라운드 {round_num}] 토론 진행 중...")
             prev_opinions = history[-1]["opinions"]
 
-            # 다른 에이전트 의견을 컨텍스트로 구성
             debate_opinions = {}
             tasks = []
             for agent in agents:
@@ -241,6 +285,7 @@ async def run_debate(
         print(f"\n보고서 저장 완료: {report_path}")
         return {
             "topic": topic,
+            "mode": "debate",
             "agents": [a.name for a in agents],
             "rounds": len(history),
             "report": report,

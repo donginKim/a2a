@@ -15,6 +15,8 @@ class AgentInfo:
     url: str
     description: str = ""
     skills: List[str] = field(default_factory=list)
+    data_paths: List[str] = field(default_factory=list)
+    mcp_servers: List[str] = field(default_factory=list)
 
 
 @dataclass

@@ -85,10 +85,16 @@ async def register_with_orchestrator(config: AgentConfig) -> None:
         return
 
     public_url = config.public_url or f"http://localhost:{config.port}"
+    skills = [s.strip() for s in config.skills.split(",") if s.strip()]
+    data_paths = [p.strip() for p in config.data_paths.split(",") if p.strip()]
+    mcp_servers = [m.strip() for m in config.mcp_servers.split(",") if m.strip()]
     payload = {
         "name": config.name,
         "url": public_url,
         "description": config.description,
+        "skills": skills,
+        "data_paths": data_paths,
+        "mcp_servers": mcp_servers,
     }
 
     try:

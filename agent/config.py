@@ -21,6 +21,12 @@ class AgentConfig:
     data_dir: str = "./data"
     # 허용할 Claude 도구 목록
     allowed_tools: str = "Read,Glob,Grep"
+    # 에이전트 스킬셋 (쉼표 구분)
+    skills: str = "general,analysis"
+    # 추가 데이터 경로 (쉼표 구분, 에이전트가 참고할 파일/폴더)
+    data_paths: str = ""
+    # MCP 서버 목록 (쉼표 구분)
+    mcp_servers: str = ""
 
 
 def load_config() -> AgentConfig:
@@ -33,4 +39,7 @@ def load_config() -> AgentConfig:
         public_url=os.getenv("AGENT_PUBLIC_URL", ""),
         data_dir=os.getenv("DATA_DIR", "./data"),
         allowed_tools=os.getenv("ALLOWED_TOOLS", "Read,Glob,Grep"),
+        skills=os.getenv("AGENT_SKILLS", "general,analysis"),
+        data_paths=os.getenv("AGENT_DATA_PATHS", ""),
+        mcp_servers=os.getenv("AGENT_MCP_SERVERS", ""),
     )

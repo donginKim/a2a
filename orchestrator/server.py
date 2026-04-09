@@ -118,6 +118,8 @@ async def register_agent(request: Request) -> JSONResponse:
         url = body.get("url")
         description = body.get("description", "")
         skills = body.get("skills", [])
+        data_paths = body.get("data_paths", [])
+        mcp_servers = body.get("mcp_servers", [])
         if not name or not url:
             return JSONResponse({"error": "name과 url은 필수입니다"}, status_code=400)
 
@@ -127,11 +129,24 @@ async def register_agent(request: Request) -> JSONResponse:
                 agent.url = url
                 agent.description = description
                 agent.skills = skills
-                return JSONResponse({"message": f"에이전트 '{name}' 업데이트 완료", "url": url, "skills": skills})
+                agent.data_paths = data_paths
+                agent.mcp_servers = mcp_servers
+                return JSONResponse({
+                    "message": f"에이전트 '{name}' 업데이트 완료",
+                    "url": url, "skills": skills,
+                    "data_paths": data_paths, "mcp_servers": mcp_servers,
+                })
 
         from config import AgentInfo
-        cfg.registered_agents.append(AgentInfo(name=name, url=url, description=description, skills=skills))
-        return JSONResponse({"message": f"에이전트 '{name}' 등록 완료", "url": url})
+        cfg.registered_agents.append(AgentInfo(
+            name=name, url=url, description=description,
+            skills=skills, data_paths=data_paths, mcp_servers=mcp_servers,
+        ))
+        return JSONResponse({
+            "message": f"에이전트 '{name}' 등록 완료",
+            "url": url, "skills": skills,
+            "data_paths": data_paths, "mcp_servers": mcp_servers,
+        })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
 
@@ -141,7 +156,10 @@ async def list_agents(request: Request) -> JSONResponse:
     cfg: OrchestratorConfig = request.app.state.config
     return JSONResponse({
         "agents": [
-            {"name": a.name, "url": a.url, "description": a.description, "skills": a.skills}
+            {
+                "name": a.name, "url": a.url, "description": a.description,
+                "skills": a.skills, "data_paths": a.data_paths, "mcp_servers": a.mcp_servers,
+            }
             for a in cfg.registered_agents
         ]
     })
