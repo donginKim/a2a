@@ -15,7 +15,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 AGENT_DIR="$PROJECT_DIR/agent"
 ORCH_DIR="$PROJECT_DIR/orchestrator"
 VENV_DIR="$PROJECT_DIR/.venv"
-MIN_PYTHON_VERSION="3.10"
+REQUIRED_PYTHON="3.12"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -55,92 +55,173 @@ select_role() {
 }
 
 # ──────────────────────────────────────────
-# 환경 검증 (공통)
+# 누락 항목 수집 → Y/N 한 번에 확인 → 자동 설치
 # ──────────────────────────────────────────
 verify_environment() {
-    header "환경 검증"
+    header "환경 검증 (Python ${REQUIRED_PYTHON} 고정)"
 
-    # --- Python ---
-    step "1/5" "Python 확인 (>= $MIN_PYTHON_VERSION)"
+    local missing=()
     local python_cmd=""
-    for cmd in python3 python; do
+    local need_venv=false
+
+    # ── 1. 검사: 무엇이 누락되었는지 파악 ──
+
+    # Homebrew (Mac만)
+    if [[ "$(uname)" == "Darwin" ]] && ! command -v brew &>/dev/null; then
+        missing+=("Homebrew")
+    fi
+
+    # Python 정확한 버전
+    for cmd in "python${REQUIRED_PYTHON}" python3 python; do
         if command -v "$cmd" &>/dev/null; then
             local ver
             ver=$("$cmd" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
-            if python3 -c "exit(0 if tuple(map(int,'$ver'.split('.'))) >= tuple(map(int,'$MIN_PYTHON_VERSION'.split('.'))) else 1)" 2>/dev/null; then
+            if [ "$ver" = "$REQUIRED_PYTHON" ]; then
                 python_cmd="$cmd"
                 break
             fi
         fi
     done
+    if [ -z "$python_cmd" ]; then
+        missing+=("Python ${REQUIRED_PYTHON}")
+    fi
 
-    if [ -n "$python_cmd" ]; then
-        pass "Python: $($python_cmd --version)"
+    # Node.js
+    if ! command -v node &>/dev/null; then
+        missing+=("Node.js")
+    fi
+
+    # Claude Code CLI
+    if ! command -v claude &>/dev/null; then
+        missing+=("Claude Code CLI")
+    fi
+
+    # cloudflared (Meta 제외)
+    if [ "$ROLE" != "meta" ] && ! command -v cloudflared &>/dev/null; then
+        missing+=("cloudflared")
+    fi
+
+    # venv
+    if [ ! -d "$VENV_DIR" ] || ! "$VENV_DIR/bin/python3" -c "import sys" 2>/dev/null; then
+        need_venv=true
+    fi
+
+    # ── 2. 이미 설치된 항목 출력 ──
+
+    echo ""
+    [ -n "$python_cmd" ] && pass "Python: $($python_cmd --version)"
+    command -v node &>/dev/null && pass "Node.js: $(node -v)"
+    command -v claude &>/dev/null && pass "Claude Code CLI: 설치됨"
+    [ "$ROLE" != "meta" ] && command -v cloudflared &>/dev/null && pass "cloudflared: $(cloudflared --version 2>&1 | head -1)"
+
+    # ── 3. 누락 항목이 있으면 Y/N 한 번만 확인 ──
+
+    if [ ${#missing[@]} -gt 0 ] || [ "$need_venv" = true ]; then
+        echo ""
+        echo -e "${YELLOW}다음 항목이 설치되지 않았습니다:${NC}"
+        for item in "${missing[@]}"; do
+            echo -e "  ${RED}✗${NC} $item"
+        done
+        [ "$need_venv" = true ] && echo -e "  ${RED}✗${NC} Python 가상환경 (venv)"
+        echo ""
+        read -p "모두 자동 설치를 진행할까요? [Y/n]: " CONFIRM
+        CONFIRM=${CONFIRM:-y}
+        if [[ ! "$CONFIRM" =~ ^[Yy] ]]; then
+            fail "설치를 취소했습니다. 위 항목을 수동으로 설치 후 다시 실행하세요."
+            exit 1
+        fi
+        echo ""
     else
+        echo ""
+        pass "모든 필수 항목이 설치되어 있습니다"
+    fi
+
+    # ── 4. 자동 설치 ──
+
+    # Homebrew (Mac)
+    if [[ " ${missing[*]} " =~ "Homebrew" ]]; then
+        step "설치" "Homebrew"
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        # Apple Silicon PATH
+        [ -f /opt/homebrew/bin/brew ] && eval "$(/opt/homebrew/bin/brew shellenv)"
+        pass "Homebrew 설치 완료"
+    fi
+
+    # Python 고정 버전
+    if [[ " ${missing[*]} " =~ "Python" ]]; then
+        step "설치" "Python ${REQUIRED_PYTHON}"
         if command -v brew &>/dev/null; then
-            warn "Python 미설치 → brew로 설치"
-            brew install python@3.12
-            python_cmd="python3"
+            brew install "python@${REQUIRED_PYTHON}"
+            # brew로 설치 후 정확한 경로 찾기
+            python_cmd="$(brew --prefix python@${REQUIRED_PYTHON})/bin/python${REQUIRED_PYTHON}"
+            if [ ! -f "$python_cmd" ]; then
+                python_cmd="python${REQUIRED_PYTHON}"
+            fi
         elif command -v apt-get &>/dev/null; then
-            warn "Python 미설치 → apt로 설치"
-            sudo apt-get update -qq && sudo apt-get install -y python3 python3-pip python3-venv
-            python_cmd="python3"
+            sudo apt-get update -qq
+            sudo apt-get install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-venv" "python${REQUIRED_PYTHON}-dev"
+            python_cmd="python${REQUIRED_PYTHON}"
         else
-            fail "Python >= $MIN_PYTHON_VERSION를 수동으로 설치해주세요"
+            fail "Python ${REQUIRED_PYTHON}을 수동으로 설치해주세요"
             exit 1
         fi
         pass "Python 설치 완료: $($python_cmd --version)"
     fi
 
-    # --- Node.js ---
-    step "2/5" "Node.js 확인"
-    if command -v node &>/dev/null; then
-        pass "Node.js: $(node -v)"
-    else
+    # Node.js
+    if [[ " ${missing[*]} " =~ "Node.js" ]]; then
+        step "설치" "Node.js"
         if command -v brew &>/dev/null; then
             brew install node
         elif command -v apt-get &>/dev/null; then
             curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
             sudo apt-get install -y nodejs
         fi
-        pass "Node.js: $(node -v)"
+        pass "Node.js 설치 완료: $(node -v)"
     fi
 
-    # --- Claude Code CLI ---
-    step "3/5" "Claude Code CLI 확인"
-    if command -v claude &>/dev/null; then
-        pass "Claude Code CLI 설치됨"
-    else
-        warn "Claude Code CLI 미설치 → 설치 중"
+    # Claude Code CLI
+    if [[ " ${missing[*]} " =~ "Claude Code CLI" ]]; then
+        step "설치" "Claude Code CLI"
         npm install -g @anthropic-ai/claude-code
         pass "Claude Code CLI 설치 완료"
     fi
 
-    # --- cloudflared (에이전트/하위 오케스트레이터만) ---
-    if [ "$ROLE" != "meta" ]; then
-        step "4/5" "cloudflared 확인"
-        if command -v cloudflared &>/dev/null; then
-            pass "cloudflared: $(cloudflared --version 2>&1 | head -1)"
-        else
-            if command -v brew &>/dev/null; then
-                brew install cloudflared
-            else
-                warn "cloudflared를 수동 설치해주세요: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"
-            fi
+    # cloudflared
+    if [[ " ${missing[*]} " =~ "cloudflared" ]]; then
+        step "설치" "cloudflared"
+        if command -v brew &>/dev/null; then
+            brew install cloudflared
+        elif command -v apt-get &>/dev/null; then
+            curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
+            sudo dpkg -i /tmp/cloudflared.deb
+            rm -f /tmp/cloudflared.deb
         fi
-    else
-        step "4/5" "cloudflared 스킵 (Meta-Orchestrator는 불필요)"
-        pass "스킵"
+        pass "cloudflared 설치 완료"
     fi
 
-    # --- Python venv & 패키지 ---
-    step "5/5" "Python 가상환경 & 패키지"
-    if [ ! -d "$VENV_DIR" ] || ! "$VENV_DIR/bin/python3" -c "import sys" 2>/dev/null; then
-        warn "venv 생성 중..."
+    # ── 5. Python venv & 패키지 (항상 실행) ──
+
+    step "설정" "Python ${REQUIRED_PYTHON} 가상환경 & 패키지"
+
+    # venv가 없거나 버전이 다르면 재생성
+    if [ "$need_venv" = true ]; then
         rm -rf "$VENV_DIR"
         "$python_cmd" -m venv "$VENV_DIR"
+        pass "venv 생성: $("$VENV_DIR/bin/python3" --version)"
+    else
+        # venv가 있어도 Python 버전 확인
+        local venv_ver
+        venv_ver=$("$VENV_DIR/bin/python3" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
+        if [ "$venv_ver" != "$REQUIRED_PYTHON" ]; then
+            warn "venv Python 버전 불일치 ($venv_ver != $REQUIRED_PYTHON) → 재생성"
+            rm -rf "$VENV_DIR"
+            "$python_cmd" -m venv "$VENV_DIR"
+            pass "venv 재생성: $("$VENV_DIR/bin/python3" --version)"
+        else
+            pass "venv: $("$VENV_DIR/bin/python3" --version)"
+        fi
     fi
-    pass "venv: $("$VENV_DIR/bin/python3" --version)"
 
     # 패키지 설치
     local req_file="$ORCH_DIR/requirements.txt"
@@ -148,7 +229,6 @@ verify_environment() {
         req_file="$AGENT_DIR/requirements.txt"
     fi
     "$VENV_DIR/bin/pip" install -q -r "$req_file" 2>/dev/null
-    # 하위 오케스트레이터는 두 requirements 모두 필요
     if [ "$ROLE" = "sub" ]; then
         "$VENV_DIR/bin/pip" install -q -r "$AGENT_DIR/requirements.txt" 2>/dev/null
     fi
@@ -161,6 +241,9 @@ verify_environment() {
         fail "a2a-sdk import 실패. 수동 확인 필요"
         exit 1
     fi
+
+    echo ""
+    pass "환경 준비 완료 (Python ${REQUIRED_PYTHON})"
 }
 
 # ──────────────────────────────────────────
