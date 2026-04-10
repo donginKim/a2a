@@ -342,9 +342,8 @@ EOF
     echo ""
 
     cd "$ORCH_DIR"
-    source "$VENV_DIR/bin/activate"
     set -a && source .env && set +a
-    exec python server.py
+    exec "$VENV_DIR/bin/python3" server.py
 }
 
 # ──────────────────────────────────────────
@@ -423,8 +422,6 @@ EOF
     }
     trap cleanup EXIT INT TERM
 
-    source "$VENV_DIR/bin/activate"
-
     # 에이전트 설정 & 시작
     if [[ "$WITH_AGENT" =~ ^[Yy] ]]; then
         echo ""
@@ -459,7 +456,7 @@ EOF
 
         cd "$AGENT_DIR"
         set -a && source .env && set +a
-        python server.py &
+        "$VENV_DIR/bin/python3" server.py &
         AGENT_PID=$!
         pass "에이전트 시작 (PID: $AGENT_PID, 포트: $AG_PORT)"
         sleep 2
@@ -508,7 +505,7 @@ EOF
 
     cd "$ORCH_DIR"
     set -a && source .env && set +a
-    python server.py
+    "$VENV_DIR/bin/python3" server.py
 }
 
 # ──────────────────────────────────────────
@@ -558,8 +555,6 @@ AGENT_SKILLS=$AG_SKILLS
 EOF
     pass ".env 생성"
 
-    source "$VENV_DIR/bin/activate"
-
     if [[ "$USE_TUNNEL" =~ ^[Yy] ]]; then
         # 터널 모드 - 기존 스크립트 활용
         echo ""
@@ -588,7 +583,7 @@ EOF
 
         cd "$AGENT_DIR"
         set -a && source .env && set +a
-        exec python server.py
+        exec "$VENV_DIR/bin/python3" server.py
     fi
 }
 
