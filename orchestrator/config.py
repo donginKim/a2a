@@ -17,6 +17,8 @@ class AgentInfo:
     skills: List[str] = field(default_factory=list)
     data_paths: List[str] = field(default_factory=list)
     mcp_servers: List[str] = field(default_factory=list)
+    # "agent" (일반) 또는 "orchestrator" (하위 오케스트레이터)
+    agent_type: str = "agent"
 
 
 @dataclass
@@ -31,6 +33,15 @@ class OrchestratorConfig:
     debate_rounds: int = 2
     # 보고서 출력 디렉토리
     output_dir: str = "./reports"
+    # --- 계층형 오케스트레이터 지원 ---
+    # 상위 오케스트레이터 URL (설정 시 하위 오케스트레이터로 동작)
+    parent_url: str = ""
+    # 이 오케스트레이터의 공개 URL (상위에 등록할 때 사용)
+    public_url: str = ""
+    # 상위에 광고할 스킬 목록 (쉼표 구분)
+    skills: str = ""
+    # 하위 오케스트레이터 호출 시 타임아웃 (초)
+    sub_orchestrator_timeout: float = 600.0
 
 
 def load_config() -> OrchestratorConfig:
@@ -40,6 +51,10 @@ def load_config() -> OrchestratorConfig:
         name=os.getenv("ORCHESTRATOR_NAME", "A2A Orchestrator"),
         debate_rounds=int(os.getenv("DEBATE_ROUNDS", "2")),
         output_dir=os.getenv("OUTPUT_DIR", "./reports"),
+        parent_url=os.getenv("PARENT_ORCHESTRATOR_URL", ""),
+        public_url=os.getenv("ORCHESTRATOR_PUBLIC_URL", ""),
+        skills=os.getenv("ORCHESTRATOR_SKILLS", ""),
+        sub_orchestrator_timeout=float(os.getenv("SUB_ORCHESTRATOR_TIMEOUT", "600")),
     )
 
     # 에이전트 목록을 JSON 파일에서 로드

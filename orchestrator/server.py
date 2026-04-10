@@ -33,6 +33,8 @@ from starlette.routing import Route, Mount
 from starlette.staticfiles import StaticFiles
 from starlette.responses import StreamingResponse, HTMLResponse
 
+from contextlib import asynccontextmanager
+
 from config import load_config, OrchestratorConfig
 from orchestrator_agent import run_debate, run_debate_streaming, select_agents_for_topic, call_agent
 
@@ -83,10 +85,12 @@ class OrchestratorExecutor(AgentExecutor):
 
 
 def build_agent_card(config: OrchestratorConfig) -> AgentCard:
+    # 공개 URL이 설정되어 있으면 사용 (상위 오케스트레이터에서 접근 가능한 URL)
+    base_url = config.public_url or f"http://{config.host}:{config.port}"
     return AgentCard(
         name=config.name,
         description=config.description,
-        url=f"http://{config.host}:{config.port}/",
+        url=f"{base_url}/",
         version="1.0.0",
         defaultInputModes=["text"],
         defaultOutputModes=["text"],
@@ -109,6 +113,36 @@ def build_agent_card(config: OrchestratorConfig) -> AgentCard:
     )
 
 
+async def register_with_parent(config: OrchestratorConfig) -> None:
+    """상위 오케스트레이터에 이 오케스트레이터를 에이전트로 등록합니다."""
+    if not config.parent_url:
+        return
+
+    public_url = config.public_url or f"http://localhost:{config.port}"
+    skills = [s.strip() for s in config.skills.split(",") if s.strip()]
+    payload = {
+        "name": config.name,
+        "url": public_url,
+        "description": config.description,
+        "skills": skills,
+        "agent_type": "orchestrator",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                f"{config.parent_url}/agents/register",
+                json=payload,
+            )
+            if resp.status_code == 200:
+                print(f"상위 오케스트레이터 등록 완료: {config.parent_url}")
+                print(f"  등록 정보: name={config.name}, url={public_url}, type=orchestrator")
+            else:
+                print(f"상위 등록 실패 (HTTP {resp.status_code}): {resp.text}")
+    except Exception as e:
+        print(f"상위 오케스트레이터 연결 실패 (나중에 수동 등록 필요): {e}")
+
+
 # REST API: 에이전트 등록
 async def register_agent(request: Request) -> JSONResponse:
     cfg: OrchestratorConfig = request.app.state.config
@@ -120,6 +154,7 @@ async def register_agent(request: Request) -> JSONResponse:
         skills = body.get("skills", [])
         data_paths = body.get("data_paths", [])
         mcp_servers = body.get("mcp_servers", [])
+        agent_type = body.get("agent_type", "agent")
         if not name or not url:
             return JSONResponse({"error": "name과 url은 필수입니다"}, status_code=400)
 
@@ -131,21 +166,25 @@ async def register_agent(request: Request) -> JSONResponse:
                 agent.skills = skills
                 agent.data_paths = data_paths
                 agent.mcp_servers = mcp_servers
+                agent.agent_type = agent_type
                 return JSONResponse({
                     "message": f"에이전트 '{name}' 업데이트 완료",
                     "url": url, "skills": skills,
                     "data_paths": data_paths, "mcp_servers": mcp_servers,
+                    "agent_type": agent_type,
                 })
 
         from config import AgentInfo
         cfg.registered_agents.append(AgentInfo(
             name=name, url=url, description=description,
             skills=skills, data_paths=data_paths, mcp_servers=mcp_servers,
+            agent_type=agent_type,
         ))
         return JSONResponse({
             "message": f"에이전트 '{name}' 등록 완료",
             "url": url, "skills": skills,
             "data_paths": data_paths, "mcp_servers": mcp_servers,
+            "agent_type": agent_type,
         })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -159,6 +198,7 @@ async def list_agents(request: Request) -> JSONResponse:
             {
                 "name": a.name, "url": a.url, "description": a.description,
                 "skills": a.skills, "data_paths": a.data_paths, "mcp_servers": a.mcp_servers,
+                "agent_type": a.agent_type,
             }
             for a in cfg.registered_agents
         ]
@@ -344,11 +384,21 @@ def create_app(config: OrchestratorConfig) -> Starlette:
         Route("/query", skill_query, methods=["POST"]),
     ]
 
+    a2a_inner = a2a_app.build()
+
+    @asynccontextmanager
+    async def lifespan(app):
+        # 상위 오케스트레이터에 등록 (계층형 모드일 때)
+        if config.parent_url:
+            await register_with_parent(config)
+        yield
+
     app = Starlette(
         routes=[
             *extra_routes,
-            Mount("/", app=a2a_app.build()),
-        ]
+            Mount("/", app=a2a_inner),
+        ],
+        lifespan=lifespan,
     )
     app.state.config = config
     return app
@@ -358,6 +408,9 @@ def main():
     config = load_config()
     print(f"오케스트레이터 시작: http://{config.host}:{config.port}")
     print(f"등록된 에이전트: {[a.name for a in config.registered_agents]}")
+    if config.parent_url:
+        print(f"계층형 모드: 상위 오케스트레이터 {config.parent_url}에 등록 예정")
+        print(f"  공개 URL: {config.public_url or f'http://localhost:{config.port}'}")
     app = create_app(config)
     uvicorn.run(app, host=config.host, port=config.port, log_level="info")
 

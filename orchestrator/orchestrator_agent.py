@@ -50,9 +50,18 @@ async def call_agent(
     prompt: str,
     timeout: float = 120.0,
 ) -> str:
-    """단일 에이전트에게 Task를 보내고 결과를 반환합니다."""
+    """단일 에이전트에게 Task를 보내고 결과를 반환합니다.
+    하위 오케스트레이터(agent_type='orchestrator')는 내부 토론 시간이
+    필요하므로 별도 타임아웃 적용 클라이언트를 생성합니다.
+    """
     try:
-        client = A2AClient(http_client, url=agent.url)
+        # 하위 오케스트레이터는 더 긴 타임아웃 필요
+        if agent.agent_type == "orchestrator":
+            effective_timeout = max(timeout, 600.0)
+            agent_client = httpx.AsyncClient(timeout=effective_timeout)
+        else:
+            agent_client = http_client
+        client = A2AClient(agent_client, url=agent.url)
         response = await client.send_message(
             SendMessageRequest(
                 id=str(uuid.uuid4()),
@@ -103,6 +112,10 @@ async def call_agent(
         return f"[{agent.name}] 응답 파싱 실패: {str(response)[:200]}"
     except Exception as e:
         return f"[{agent.name} 오류] {str(e)}"
+    finally:
+        # 하위 오케스트레이터용 전용 클라이언트는 닫기
+        if agent.agent_type == "orchestrator" and agent_client is not http_client:
+            await agent_client.aclose()
 
 
 async def gather_opinions(
@@ -182,7 +195,12 @@ async def run_debate_streaming(
     스트리밍 토론. event_callback(event_type, data_dict)를 호출하여 진행 상황을 전달합니다.
     단일 에이전트면 바로 답변, 2개 이상이면 토론.
     """
-    async with httpx.AsyncClient(timeout=120.0) as http_client:
+    has_sub_orchestrators = any(
+        a.agent_type == "orchestrator" for a in config.registered_agents
+    )
+    base_timeout = config.sub_orchestrator_timeout if has_sub_orchestrators else 120.0
+
+    async with httpx.AsyncClient(timeout=base_timeout) as http_client:
         agents = config.registered_agents
         if any(a.skills for a in agents):
             await event_callback("status", {"phase": "skill_matching", "message": "주제에 적합한 에이전트 선별 중..."})
@@ -333,7 +351,13 @@ async def run_debate(
     """
     history = []
 
-    async with httpx.AsyncClient(timeout=120.0) as http_client:
+    # 하위 오케스트레이터가 포함되어 있으면 타임아웃 확장
+    has_sub_orchestrators = any(
+        a.agent_type == "orchestrator" for a in config.registered_agents
+    )
+    base_timeout = config.sub_orchestrator_timeout if has_sub_orchestrators else 120.0
+
+    async with httpx.AsyncClient(timeout=base_timeout) as http_client:
         agents = config.registered_agents
         if select_by_skill and any(a.skills for a in agents):
             print("[스킬 매칭] 주제에 적합한 에이전트 선별 중...")
