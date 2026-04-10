@@ -25,6 +25,30 @@ from a2a.types import (
 
 from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage
 from config import OrchestratorConfig, AgentInfo
+from knowledge_store import KnowledgeStore
+
+
+def _build_knowledge_context(store: KnowledgeStore, topic: str, max_reports: int = 3) -> str:
+    """과거 관련 보고서를 검색하여 컨텍스트 문자열로 반환합니다."""
+    if not store:
+        return ""
+    related = store.search_reports(topic, limit=max_reports)
+    if not related:
+        return ""
+    parts = ["## 과거 관련 토론 참고\n"]
+    for r in related:
+        date = r["created_at"][:10]
+        agents = r.get("agents", "")
+        # 보고서 전문이 너무 길면 앞부분만
+        summary = r["report"][:1500]
+        if len(r["report"]) > 1500:
+            summary += "\n... (이하 생략)"
+        parts.append(
+            f"### [{date}] {r['topic']}\n"
+            f"참여: {agents}\n\n"
+            f"{summary}\n"
+        )
+    return "\n".join(parts)
 
 
 def _make_message(text: str) -> Message:
@@ -343,13 +367,20 @@ async def run_debate(
     config: OrchestratorConfig,
     topic: str,
     select_by_skill: bool = True,
+    knowledge_store: Optional[KnowledgeStore] = None,
 ) -> Dict:
     """
     에이전트 수에 따라 자동으로 모드를 결정합니다.
     - 1개: 바로 답변 (토론 없음)
     - 2개+: 토론 후 보고서 생성
+    knowledge_store가 있으면 과거 관련 보고서를 컨텍스트로 주입합니다.
     """
     history = []
+
+    # 과거 관련 보고서 검색
+    knowledge_context = _build_knowledge_context(knowledge_store, topic)
+    if knowledge_context:
+        print(f"[지식 저장소] 관련 과거 보고서를 컨텍스트에 포함합니다")
 
     # 하위 오케스트레이터가 포함되어 있으면 타임아웃 확장
     has_sub_orchestrators = any(
@@ -377,9 +408,11 @@ async def run_debate(
         print(f"참여 에이전트: {[a.name for a in agents]}")
         print(f"{'='*60}\n")
 
-        # 라운드 0: 초기 의견 수집
+        # 라운드 0: 초기 의견 수집 (과거 지식 컨텍스트 포함)
         print("[라운드 0] 초기 의견 수집 중...")
-        initial_opinions = await gather_opinions(http_client, agents, topic)
+        initial_opinions = await gather_opinions(
+            http_client, agents, topic, context=knowledge_context,
+        )
         history.append({"round": 0, "type": "initial", "opinions": initial_opinions})
         for name, opinion in initial_opinions.items():
             print(f"  [{name}]: {opinion[:100]}...")
@@ -421,6 +454,14 @@ async def run_debate(
             for name, opinion in h["opinions"].items():
                 history_text += f"**{name}**: {opinion}\n\n"
 
+        # 과거 참조가 있으면 보고서 프롬프트에도 포함
+        knowledge_note = ""
+        if knowledge_context:
+            knowledge_note = (
+                f"\n\n참고: 이 토론에는 과거 관련 토론 결과가 컨텍스트로 제공되었습니다. "
+                f"과거 결론과 이번 토론의 진전 사항을 비교하여 서술해주세요.\n"
+            )
+
         report_prompt = (
             f"다음은 '{topic}'에 대한 멀티 에이전트 토론 내용입니다.\n\n"
             f"{history_text}\n\n"
@@ -429,11 +470,12 @@ async def run_debate(
             f"2. 주요 합의 사항\n"
             f"3. 쟁점 및 다양한 관점\n"
             f"4. 결론 및 권고사항\n"
+            f"{knowledge_note}"
         )
 
         report = await synthesize_with_claude(report_prompt)
 
-        # 보고서 저장
+        # 보고서 저장 (파일)
         output_dir = Path(config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -444,6 +486,17 @@ async def run_debate(
             f.write(f"**참여 에이전트**: {', '.join(a.name for a in agents)}\n\n")
             f.write("---\n\n")
             f.write(report)
+
+        # 보고서 저장 (지식 저장소)
+        if knowledge_store:
+            knowledge_store.save_report(
+                topic=topic,
+                report=report,
+                mode="debate",
+                agents=[a.name for a in agents],
+                report_path=str(report_path),
+            )
+            print("[지식 저장소] 보고서 저장 완료")
 
         print(f"\n보고서 저장 완료: {report_path}")
         return {

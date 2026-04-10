@@ -53,6 +53,10 @@
   .tree-dot.online{background:var(--green)}
   .tree-dot.offline{background:var(--red)}
   .tree-dot.unknown{background:var(--text-dim)}
+  .tree-status-text{font-size:.6rem;font-weight:600;flex-shrink:0;min-width:30px;text-align:center}
+  .tree-status-text.online{color:var(--green)}
+  .tree-status-text.offline{color:var(--red)}
+  .tree-status-text.unknown{color:var(--text-dim)}
   .tree-children{padding-left:1.1rem;overflow:hidden;transition:max-height .25s ease}
   .tree-children.collapsed{max-height:0 !important}
 
@@ -446,6 +450,7 @@ function renderTreeNode(node,isRoot=false){
   const displayName=node.alias||node.name;
   const health=agentHealth[node.name];
   const dotCls=isRoot?'online':health===true?'online':health===false?'offline':'unknown';
+  const statusLabel=isRoot?'출근':health===true?'출근':health===false?'퇴근':'확인 중';
   const expandId='expand_'+node.name.replace(/[^a-zA-Z0-9]/g,'_');
   const childrenId='children_'+node.name.replace(/[^a-zA-Z0-9]/g,'_');
   const selectedCls=(selectedNode===null&&isRoot)||(selectedNode&&selectedNode.name===node.name)?'selected':'';
@@ -453,9 +458,10 @@ function renderTreeNode(node,isRoot=false){
   let html=`<div class="tree-node">
     <div class="tree-row ${selectedCls}" onclick="onTreeClick(event, ${esc2(JSON.stringify(node))}, ${isRoot})" ondblclick="onTreeDblClick(${esc2(JSON.stringify(node))})">
       <div class="expand-btn ${hasChildren?'':'hidden'} ${hasChildren?'open':''}" id="${expandId}" onclick="toggleExpand(event,'${childrenId}','${expandId}')">&#9654;</div>
-      <span class="tree-dot ${dotCls}"></span>
+      <span class="tree-dot ${dotCls}" title="${statusLabel}"></span>
       <span class="tree-icon">${isOrch?'\u{1F3DB}':'\u{1F916}'}</span>
       <span class="tree-label" title="${esc(node.name)}">${esc(displayName)}</span>
+      <span class="tree-status-text ${dotCls}">${statusLabel}</span>
       <span class="tree-type-badge ${isOrch?'orch':'agent'}">${isOrch?'Orch':'Agent'}</span>
     </div>`;
 

@@ -37,6 +37,7 @@ from contextlib import asynccontextmanager
 
 from config import load_config, OrchestratorConfig
 from orchestrator_agent import run_debate, run_debate_streaming, select_agents_for_topic, call_agent
+from knowledge_store import KnowledgeStore
 
 
 def _extract_user_text(context: RequestContext) -> str:
@@ -52,8 +53,9 @@ def _extract_user_text(context: RequestContext) -> str:
 
 
 class OrchestratorExecutor(AgentExecutor):
-    def __init__(self, config: OrchestratorConfig):
+    def __init__(self, config: OrchestratorConfig, knowledge_store: KnowledgeStore = None):
         self.config = config
+        self.store = knowledge_store
 
     async def execute(self, context: RequestContext, event_queue: asyncio.Queue) -> None:
         user_text = _extract_user_text(context)
@@ -64,7 +66,7 @@ class OrchestratorExecutor(AgentExecutor):
             return
 
         try:
-            result = await run_debate(self.config, user_text)
+            result = await run_debate(self.config, user_text, knowledge_store=self.store)
             report = result.get("report", "보고서 생성 실패")
             agents_used = ", ".join(result.get("agents", []))
             final_msg = (
@@ -160,7 +162,16 @@ async def register_agent(request: Request) -> JSONResponse:
         if not name or not url:
             return JSONResponse({"error": "name과 url은 필수입니다"}, status_code=400)
 
-        # 중복 체크
+        # 지식 저장소에 영속화
+        store = getattr(request.app.state, "knowledge_store", None)
+        if store:
+            store.save_agent(
+                name=name, url=url, description=description,
+                skills=skills, data_paths=data_paths, mcp_servers=mcp_servers,
+                agent_type=agent_type, alias=alias,
+            )
+
+        # 중복 체크 (인메모리)
         for agent in cfg.registered_agents:
             if agent.name == name:
                 agent.url = url
@@ -212,9 +223,12 @@ async def list_agents(request: Request) -> JSONResponse:
 async def delete_agent(request: Request) -> JSONResponse:
     cfg: OrchestratorConfig = request.app.state.config
     name = request.path_params["name"]
+    store = getattr(request.app.state, "knowledge_store", None)
     for i, agent in enumerate(cfg.registered_agents):
         if agent.name == name:
             cfg.registered_agents.pop(i)
+            if store:
+                store.delete_agent(name)
             return JSONResponse({"message": f"에이전트 '{name}' 삭제 완료"})
     return JSONResponse({"error": f"에이전트 '{name}'을 찾을 수 없습니다"}, status_code=404)
 
@@ -227,7 +241,8 @@ async def start_debate(request: Request) -> JSONResponse:
         topic = body.get("topic")
         if not topic:
             return JSONResponse({"error": "topic은 필수입니다"}, status_code=400)
-        result = await run_debate(cfg, topic)
+        store = getattr(request.app.state, "knowledge_store", None)
+        result = await run_debate(cfg, topic, knowledge_store=store)
         return JSONResponse(result)
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -274,14 +289,14 @@ async def healthcheck_agents(request: Request) -> JSONResponse:
                 results.append({
                     "name": agent.name,
                     "url": agent.url,
-                    "status": "online" if resp.status_code == 200 else f"error ({resp.status_code})",
+                    "status": "출근" if resp.status_code == 200 else f"오류 ({resp.status_code})",
                     "ok": resp.status_code == 200,
                 })
             except Exception as e:
                 results.append({
                     "name": agent.name,
                     "url": agent.url,
-                    "status": f"offline ({type(e).__name__})",
+                    "status": f"퇴근 ({type(e).__name__})",
                     "ok": False,
                 })
     return JSONResponse({"agents": results})
@@ -401,6 +416,37 @@ async def proxy_debate(request: Request) -> JSONResponse:
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# REST API: 지식 저장소 검색
+async def search_knowledge(request: Request) -> JSONResponse:
+    store = getattr(request.app.state, "knowledge_store", None)
+    if not store:
+        return JSONResponse({"error": "지식 저장소가 비활성화 상태입니다"}, status_code=503)
+    try:
+        q = request.query_params.get("q", "")
+        limit = int(request.query_params.get("limit", "5"))
+        if not q:
+            return JSONResponse({"error": "q 파라미터가 필요합니다"}, status_code=400)
+        results = store.search_reports(q, limit=limit)
+        # 보고서 본문이 너무 길면 잘라서 반환
+        for r in results:
+            if len(r.get("report", "")) > 2000:
+                r["report"] = r["report"][:2000] + "\n... (이하 생략)"
+        return JSONResponse({"query": q, "count": len(results), "results": results})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+# REST API: 지식 저장소 통계
+async def knowledge_stats(request: Request) -> JSONResponse:
+    store = getattr(request.app.state, "knowledge_store", None)
+    if not store:
+        return JSONResponse({"enabled": False})
+    return JSONResponse({
+        "enabled": True,
+        "report_count": store.get_report_count(),
+    })
+
+
 # SSE 스트리밍 토론
 async def stream_debate(request: Request):
     cfg: OrchestratorConfig = request.app.state.config
@@ -450,7 +496,24 @@ async def dashboard(request: Request):
 
 
 def create_app(config: OrchestratorConfig) -> Starlette:
-    executor = OrchestratorExecutor(config)
+    # 지식 저장소 초기화
+    db_path = os.environ.get("KNOWLEDGE_DB_PATH", os.path.join(config.output_dir, "knowledge.db"))
+    store = KnowledgeStore(db_path=db_path)
+
+    # 저장소에서 에이전트 목록 복원 (영속화된 데이터)
+    persisted_agents = store.load_agents()
+    if persisted_agents and not config.registered_agents:
+        from config import AgentInfo
+        for a in persisted_agents:
+            config.registered_agents.append(AgentInfo(
+                name=a["name"], url=a["url"], description=a.get("description", ""),
+                skills=a.get("skills", []), data_paths=a.get("data_paths", []),
+                mcp_servers=a.get("mcp_servers", []),
+                agent_type=a.get("agent_type", "agent"), alias=a.get("alias", ""),
+            ))
+        print(f"[지식 저장소] 에이전트 {len(persisted_agents)}개 복원: {[a['name'] for a in persisted_agents]}")
+
+    executor = OrchestratorExecutor(config, knowledge_store=store)
     agent_card = build_agent_card(config)
     handler = DefaultRequestHandler(
         agent_executor=executor,
@@ -474,6 +537,8 @@ def create_app(config: OrchestratorConfig) -> Starlette:
         Route("/query", skill_query, methods=["POST"]),
         Route("/hierarchy", hierarchy_info, methods=["GET"]),
         Route("/proxy/debate", proxy_debate, methods=["POST"]),
+        Route("/knowledge/search", search_knowledge, methods=["GET"]),
+        Route("/knowledge/stats", knowledge_stats, methods=["GET"]),
     ]
 
     a2a_inner = a2a_app.build()
@@ -484,6 +549,8 @@ def create_app(config: OrchestratorConfig) -> Starlette:
         if config.parent_url:
             await register_with_parent(config)
         yield
+        # 종료 시 저장소 정리
+        store.close()
 
     app = Starlette(
         routes=[
@@ -493,6 +560,7 @@ def create_app(config: OrchestratorConfig) -> Starlette:
         lifespan=lifespan,
     )
     app.state.config = config
+    app.state.knowledge_store = store
     return app
 
 

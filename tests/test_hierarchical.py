@@ -11,6 +11,7 @@ import asyncio
 import json
 import os
 import sys
+import tempfile
 import pytest
 import httpx
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -19,6 +20,17 @@ from unittest.mock import AsyncMock, patch, MagicMock
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "orchestrator"))
 
 from config import OrchestratorConfig, AgentInfo, load_config
+
+
+def _create_app_isolated(cfg=None):
+    """각 테스트마다 독립된 임시 DB를 사용하는 앱을 생성합니다."""
+    from server import create_app
+    if cfg is None:
+        cfg = OrchestratorConfig()
+    tmp = tempfile.mktemp(suffix=".db")
+    with patch.dict(os.environ, {"KNOWLEDGE_DB_PATH": tmp}):
+        app = create_app(cfg)
+    return app, tmp
 
 
 # ============================================================
@@ -244,11 +256,9 @@ class TestAgentCard:
 class TestAgentRegistrationAPI:
     @pytest.mark.asyncio
     async def test_register_orchestrator_type_agent(self):
-        from server import create_app
         from starlette.testclient import TestClient
 
-        cfg = OrchestratorConfig()
-        app = create_app(cfg)
+        app, _ = _create_app_isolated()
 
         with TestClient(app) as client:
             resp = client.post("/agents/register", json={
@@ -271,11 +281,9 @@ class TestAgentRegistrationAPI:
 
     @pytest.mark.asyncio
     async def test_register_mixed_agent_types(self):
-        from server import create_app
         from starlette.testclient import TestClient
 
-        cfg = OrchestratorConfig()
-        app = create_app(cfg)
+        app, _ = _create_app_isolated()
 
         with TestClient(app) as client:
             # 일반 에이전트 등록
@@ -300,11 +308,9 @@ class TestAgentRegistrationAPI:
 
     @pytest.mark.asyncio
     async def test_update_agent_type(self):
-        from server import create_app
         from starlette.testclient import TestClient
 
-        cfg = OrchestratorConfig()
-        app = create_app(cfg)
+        app, _ = _create_app_isolated()
 
         with TestClient(app) as client:
             # 처음엔 일반 에이전트로 등록
@@ -400,11 +406,9 @@ class TestAlias:
 
     @pytest.mark.asyncio
     async def test_register_with_alias(self):
-        from server import create_app
         from starlette.testclient import TestClient
 
-        cfg = OrchestratorConfig()
-        app = create_app(cfg)
+        app, _ = _create_app_isolated()
 
         with TestClient(app) as client:
             resp = client.post("/agents/register", json={
@@ -426,7 +430,6 @@ class TestAlias:
 class TestHierarchyAPI:
     @pytest.mark.asyncio
     async def test_hierarchy_returns_root_info(self):
-        from server import create_app
         from starlette.testclient import TestClient
 
         cfg = OrchestratorConfig(
@@ -434,7 +437,7 @@ class TestHierarchyAPI:
             alias="메타",
             description="최상위 오케스트레이터",
         )
-        app = create_app(cfg)
+        app, _ = _create_app_isolated(cfg)
 
         with TestClient(app) as client:
             resp = client.get("/hierarchy?recursive=false")
@@ -447,11 +450,10 @@ class TestHierarchyAPI:
 
     @pytest.mark.asyncio
     async def test_hierarchy_with_agents(self):
-        from server import create_app
         from starlette.testclient import TestClient
 
         cfg = OrchestratorConfig(name="Orch")
-        app = create_app(cfg)
+        app, _ = _create_app_isolated(cfg)
 
         with TestClient(app) as client:
             client.post("/agents/register", json={
@@ -486,11 +488,9 @@ class TestHierarchyAPI:
 class TestProxyDebateAPI:
     @pytest.mark.asyncio
     async def test_proxy_to_agent(self):
-        from server import create_app
         from starlette.testclient import TestClient
 
-        cfg = OrchestratorConfig()
-        app = create_app(cfg)
+        app, _ = _create_app_isolated()
 
         with TestClient(app) as client:
             client.post("/agents/register", json={
@@ -511,11 +511,9 @@ class TestProxyDebateAPI:
 
     @pytest.mark.asyncio
     async def test_proxy_target_not_found(self):
-        from server import create_app
         from starlette.testclient import TestClient
 
-        cfg = OrchestratorConfig()
-        app = create_app(cfg)
+        app, _ = _create_app_isolated()
 
         with TestClient(app) as client:
             resp = client.post("/proxy/debate", json={
@@ -526,15 +524,121 @@ class TestProxyDebateAPI:
 
     @pytest.mark.asyncio
     async def test_proxy_missing_params(self):
-        from server import create_app
         from starlette.testclient import TestClient
 
-        cfg = OrchestratorConfig()
-        app = create_app(cfg)
+        app, _ = _create_app_isolated()
 
         with TestClient(app) as client:
             resp = client.post("/proxy/debate", json={"topic": "test"})
             assert resp.status_code == 400
 
             resp = client.post("/proxy/debate", json={"target": "x"})
+            assert resp.status_code == 400
+
+
+# ============================================================
+# 10. 지식 저장소 테스트
+# ============================================================
+
+class TestKnowledgeStore:
+    def _make_store(self):
+        from knowledge_store import KnowledgeStore
+        tmp = tempfile.mktemp(suffix=".db")
+        return KnowledgeStore(db_path=tmp), tmp
+
+    def test_save_and_search_report(self):
+        store, _ = self._make_store()
+        store.save_report(
+            topic="마이크로서비스 전환",
+            report="Kong API 게이트웨이를 도입하기로 합의",
+            mode="debate",
+            agents=["agent-a", "agent-b"],
+        )
+        results = store.search_reports("마이크로서비스")
+        assert len(results) >= 1
+        assert "Kong" in results[0]["report"]
+        store.close()
+
+    def test_search_no_results(self):
+        store, _ = self._make_store()
+        results = store.search_reports("존재하지않는주제xyz")
+        assert len(results) == 0
+        store.close()
+
+    def test_report_count(self):
+        store, _ = self._make_store()
+        assert store.get_report_count() == 0
+        store.save_report(topic="t1", report="r1")
+        store.save_report(topic="t2", report="r2")
+        assert store.get_report_count() == 2
+        store.close()
+
+    def test_agent_persistence(self):
+        from knowledge_store import KnowledgeStore
+        tmp = tempfile.mktemp(suffix=".db")
+
+        # 저장
+        store1 = KnowledgeStore(db_path=tmp)
+        store1.save_agent(name="test-agent", url="http://localhost:8001", alias="테스트")
+        store1.close()
+
+        # 재로드
+        store2 = KnowledgeStore(db_path=tmp)
+        agents = store2.load_agents()
+        assert len(agents) == 1
+        assert agents[0]["name"] == "test-agent"
+        assert agents[0]["alias"] == "테스트"
+        store2.close()
+
+    def test_agent_upsert(self):
+        store, _ = self._make_store()
+        store.save_agent(name="a1", url="http://old:8001")
+        store.save_agent(name="a1", url="http://new:8001", alias="갱신됨")
+        agents = store.load_agents()
+        assert len(agents) == 1
+        assert agents[0]["url"] == "http://new:8001"
+        assert agents[0]["alias"] == "갱신됨"
+        store.close()
+
+    def test_agent_delete(self):
+        store, _ = self._make_store()
+        store.save_agent(name="a1", url="http://localhost:8001")
+        assert store.delete_agent("a1") is True
+        assert store.delete_agent("nonexistent") is False
+        assert len(store.load_agents()) == 0
+        store.close()
+
+    def test_recent_reports(self):
+        store, _ = self._make_store()
+        for i in range(5):
+            store.save_report(topic=f"topic-{i}", report=f"report-{i}")
+        recent = store.get_recent_reports(limit=3)
+        assert len(recent) == 3
+        store.close()
+
+
+class TestKnowledgeAPI:
+    @pytest.mark.asyncio
+    async def test_knowledge_stats(self):
+        from starlette.testclient import TestClient
+        app, _ = _create_app_isolated()
+        with TestClient(app) as client:
+            resp = client.get("/knowledge/stats")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["enabled"] is True
+            assert data["report_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_knowledge_search(self):
+        from starlette.testclient import TestClient
+        app, _ = _create_app_isolated()
+        with TestClient(app) as client:
+            # 빈 검색
+            resp = client.get("/knowledge/search?q=test")
+            assert resp.status_code == 200
+            assert resp.json()["count"] == 0
+
+            # q 누락
+            resp = client.get("/knowledge/search")
             assert resp.status_code == 400
