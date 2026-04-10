@@ -152,17 +152,39 @@ verify_environment() {
         step "설치" "Python ${REQUIRED_PYTHON}"
         if command -v brew &>/dev/null; then
             brew install "python@${REQUIRED_PYTHON}"
-            # brew로 설치 후 정확한 경로 찾기
             python_cmd="$(brew --prefix python@${REQUIRED_PYTHON})/bin/python${REQUIRED_PYTHON}"
-            if [ ! -f "$python_cmd" ]; then
-                python_cmd="python${REQUIRED_PYTHON}"
-            fi
+            [ ! -f "$python_cmd" ] && python_cmd="python${REQUIRED_PYTHON}"
         elif command -v apt-get &>/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y software-properties-common
+            sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
             sudo apt-get update -qq
             sudo apt-get install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-venv" "python${REQUIRED_PYTHON}-dev"
             python_cmd="python${REQUIRED_PYTHON}"
+        elif command -v dnf &>/dev/null; then
+            sudo dnf install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel" 2>/dev/null || {
+                warn "기본 저장소에 없음 → EPEL + CRB 활성화 후 재시도"
+                sudo dnf install -y epel-release 2>/dev/null || true
+                sudo dnf config-manager --set-enabled crb 2>/dev/null || \
+                    sudo dnf config-manager --set-enabled powertools 2>/dev/null || true
+                sudo dnf install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel"
+            }
+            python_cmd="python${REQUIRED_PYTHON}"
+        elif command -v yum &>/dev/null; then
+            sudo yum install -y epel-release 2>/dev/null || true
+            sudo yum install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel" 2>/dev/null || {
+                warn "yum에서 설치 실패 → 소스 빌드로 설치"
+                sudo yum groupinstall -y "Development Tools"
+                sudo yum install -y openssl-devel bzip2-devel libffi-devel zlib-devel
+                curl -fsSL "https://www.python.org/ftp/python/${REQUIRED_PYTHON}.0/Python-${REQUIRED_PYTHON}.0.tgz" -o /tmp/python.tgz
+                cd /tmp && tar xzf python.tgz && cd "Python-${REQUIRED_PYTHON}.0"
+                ./configure --enable-optimizations --prefix=/usr/local
+                make -j"$(nproc)" && sudo make altinstall
+                cd "$PROJECT_DIR" && rm -rf /tmp/python.tgz /tmp/Python-*
+            }
+            python_cmd="python${REQUIRED_PYTHON}"
         else
-            fail "Python ${REQUIRED_PYTHON}을 수동으로 설치해주세요"
+            fail "지원하지 않는 패키지 관리자입니다. Python ${REQUIRED_PYTHON}을 수동으로 설치해주세요."
             exit 1
         fi
         pass "Python 설치 완료: $($python_cmd --version)"
@@ -176,6 +198,12 @@ verify_environment() {
         elif command -v apt-get &>/dev/null; then
             curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
             sudo apt-get install -y nodejs
+        elif command -v dnf &>/dev/null; then
+            curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+            sudo dnf install -y nodejs
+        elif command -v yum &>/dev/null; then
+            curl -fsSL https://rpm.nodesource.com/setup_lts.x | sudo bash -
+            sudo yum install -y nodejs
         fi
         pass "Node.js 설치 완료: $(node -v)"
     fi
@@ -196,6 +224,10 @@ verify_environment() {
             curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -o /tmp/cloudflared.deb
             sudo dpkg -i /tmp/cloudflared.deb
             rm -f /tmp/cloudflared.deb
+        elif command -v dnf &>/dev/null || command -v yum &>/dev/null; then
+            curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-x86_64.rpm -o /tmp/cloudflared.rpm
+            sudo rpm -ivh /tmp/cloudflared.rpm 2>/dev/null || sudo rpm -Uvh /tmp/cloudflared.rpm
+            rm -f /tmp/cloudflared.rpm
         fi
         pass "cloudflared 설치 완료"
     fi
