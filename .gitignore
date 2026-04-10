@@ -33,6 +33,8 @@ Thumbs.db
 *.swp
 *.swo
 
-# Logs
+# Logs & PIDs
 *.log
+logs/
+.pids/
 /tmp/

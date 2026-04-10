@@ -15,6 +15,8 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 AGENT_DIR="$PROJECT_DIR/agent"
 ORCH_DIR="$PROJECT_DIR/orchestrator"
 VENV_DIR="$PROJECT_DIR/.venv"
+LOG_DIR="$PROJECT_DIR/logs"
+PID_DIR="$PROJECT_DIR/.pids"
 MIN_PYTHON="3.12"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
@@ -25,6 +27,41 @@ warn() { echo -e "  ${YELLOW}!${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
 step() { echo -e "\n${CYAN}[$1]${NC} $2"; }
 header() { echo -e "\n${BOLD}$1${NC}"; echo "$(printf '=%.0s' $(seq 1 ${#1}))"; }
+
+# 로그/PID 디렉토리 초기화
+init_dirs() {
+    mkdir -p "$LOG_DIR" "$PID_DIR"
+}
+
+# 서버를 백그라운드로 실행하고 로그 리다이렉션
+# 사용법: start_server <name> <work_dir> <command...>
+start_server() {
+    local name="$1"
+    local work_dir="$2"
+    shift 2
+    local log_file="$LOG_DIR/${name}.log"
+    local pid_file="$PID_DIR/${name}.pid"
+    local timestamp
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+    echo "───────────────────────────────" >> "$log_file"
+    echo "[$timestamp] $name 시작" >> "$log_file"
+    echo "───────────────────────────────" >> "$log_file"
+
+    cd "$work_dir"
+    nohup "$@" >> "$log_file" 2>&1 &
+    local pid=$!
+    echo $pid > "$pid_file"
+    echo "$pid"
+}
+
+# 로그 파일 tail (포그라운드 모니터링용)
+tail_logs() {
+    echo ""
+    echo -e "${CYAN}[로그 모니터링]${NC} 모든 서버 로그를 출력합니다 (Ctrl+C로 종료)"
+    echo ""
+    tail -F "$LOG_DIR"/*.log 2>/dev/null
+}
 
 # ──────────────────────────────────────────
 # 역할 선택
@@ -332,21 +369,35 @@ EOF
         pass "agents.json 초기화"
     fi
 
+    init_dirs
+
     echo ""
     echo -e "${GREEN}━━━ Meta-Orchestrator 시작 ━━━${NC}"
-    echo -e "  URL:   http://0.0.0.0:${META_PORT}"
+    echo -e "  URL:     http://0.0.0.0:${META_PORT}"
     echo -e "  대시보드: http://0.0.0.0:${META_PORT}/dashboard"
-    echo -e "  별칭:  $META_ALIAS"
+    echo -e "  별칭:    $META_ALIAS"
+    echo -e "  로그:    $LOG_DIR/meta-orchestrator.log"
     echo ""
     echo "하위 오케스트레이터에서 이 주소로 등록됩니다:"
     echo -e "  ${CYAN}PARENT_ORCHESTRATOR_URL=http://<이_PC_IP>:${META_PORT}${NC}"
     echo ""
-    echo "Ctrl+C로 종료"
-    echo ""
 
     cd "$ORCH_DIR"
     set -a && source .env && set +a
-    exec "$VENV_DIR/bin/python3" server.py
+    local META_PID
+    META_PID=$(start_server "meta-orchestrator" "$ORCH_DIR" "$VENV_DIR/bin/python3" server.py)
+    pass "Meta-Orchestrator 시작 (PID: $META_PID)"
+
+    cleanup() {
+        echo ""
+        echo "프로세스 종료 중..."
+        kill $META_PID 2>/dev/null || true
+        wait $META_PID 2>/dev/null || true
+        echo "종료 완료."
+    }
+    trap cleanup EXIT INT TERM
+
+    tail_logs
 }
 
 # ──────────────────────────────────────────
@@ -410,6 +461,8 @@ EOF
     read -p "이 PC에서 에이전트도 같이 실행할까요? [Y/n]: " WITH_AGENT
     WITH_AGENT=${WITH_AGENT:-y}
 
+    init_dirs
+
     local AGENT_PID=""
     local TUNNEL_PID=""
     local ORCH_TUNNEL_PID=""
@@ -448,7 +501,7 @@ EOF
 AGENT_HOST=0.0.0.0
 AGENT_PORT=$AG_PORT
 AGENT_NAME=$AG_NAME
-AGENT_DESCRIPTION=${AG_ALIAS}의 Claude 에이전트
+AGENT_DESCRIPTION=${AG_ALIAS}의 에이전트
 ORCHESTRATOR_URL=http://localhost:$SUB_PORT
 AGENT_PUBLIC_URL=http://localhost:$AG_PORT
 DATA_DIR=./data
@@ -459,9 +512,9 @@ EOF
 
         cd "$AGENT_DIR"
         set -a && source .env && set +a
-        "$VENV_DIR/bin/python3" server.py &
-        AGENT_PID=$!
+        AGENT_PID=$(start_server "agent-${AG_NAME}" "$AGENT_DIR" "$VENV_DIR/bin/python3" server.py)
         pass "에이전트 시작 (PID: $AGENT_PID, 포트: $AG_PORT)"
+        pass "에이전트 로그: $LOG_DIR/agent-${AG_NAME}.log"
         sleep 2
     fi
 
@@ -503,12 +556,20 @@ EOF
     echo -e "  스킬:    $SUB_SKILLS"
     [ -n "$AGENT_PID" ] && echo -e "  에이전트: $AG_NAME (포트 $AG_PORT)"
     echo ""
-    echo "Ctrl+C로 종료"
-    echo ""
 
     cd "$ORCH_DIR"
     set -a && source .env && set +a
-    "$VENV_DIR/bin/python3" server.py
+    local ORCH_PID
+    ORCH_PID=$(start_server "sub-orchestrator-${SUB_NAME}" "$ORCH_DIR" "$VENV_DIR/bin/python3" server.py)
+    pass "Sub-Orchestrator 시작 (PID: $ORCH_PID)"
+    pass "오케스트레이터 로그: $LOG_DIR/sub-orchestrator-${SUB_NAME}.log"
+
+    echo ""
+    echo -e "${CYAN}로그 위치:${NC}"
+    echo -e "  $LOG_DIR/"
+    ls -1 "$LOG_DIR"/*.log 2>/dev/null | while read f; do echo "    $(basename "$f")"; done
+
+    tail_logs
 }
 
 # ──────────────────────────────────────────
@@ -558,6 +619,8 @@ AGENT_SKILLS=$AG_SKILLS
 EOF
     pass ".env 생성"
 
+    init_dirs
+
     if [[ "$USE_TUNNEL" =~ ^[Yy] ]]; then
         # 터널 모드 - 기존 스크립트 활용
         echo ""
@@ -577,16 +640,28 @@ EOF
         echo -e "  이름: $AG_NAME ($AG_ALIAS)"
         echo -e "  포트: $AG_PORT"
         echo -e "  오케스트레이터: $ORCH_URL"
+        echo -e "  로그: $LOG_DIR/agent-${AG_NAME}.log"
         echo ""
         echo "data/ 폴더에 참고 데이터를 넣으면 에이전트가 활용합니다:"
         echo "  $AGENT_DIR/data/"
         echo ""
-        echo "Ctrl+C로 종료"
-        echo ""
 
         cd "$AGENT_DIR"
         set -a && source .env && set +a
-        exec "$VENV_DIR/bin/python3" server.py
+        local AG_PID
+        AG_PID=$(start_server "agent-${AG_NAME}" "$AGENT_DIR" "$VENV_DIR/bin/python3" server.py)
+        pass "에이전트 시작 (PID: $AG_PID)"
+
+        cleanup() {
+            echo ""
+            echo "프로세스 종료 중..."
+            kill $AG_PID 2>/dev/null || true
+            wait $AG_PID 2>/dev/null || true
+            echo "종료 완료."
+        }
+        trap cleanup EXIT INT TERM
+
+        tail_logs
     fi
 }
 
