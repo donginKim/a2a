@@ -94,10 +94,22 @@ if [[ " ${missing[*]} " =~ "Python" ]]; then
         [ ! -f "$python_cmd" ] && python_cmd="python${REQUIRED_PYTHON}"
     elif command -v apt-get &>/dev/null; then
         sudo apt-get update -qq
-        sudo apt-get install -y software-properties-common
-        sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
-        sudo apt-get update -qq
-        sudo apt-get install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-venv" "python${REQUIRED_PYTHON}-dev"
+        if grep -qi ubuntu /etc/os-release 2>/dev/null; then
+            sudo apt-get install -y software-properties-common
+            sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
+            sudo apt-get update -qq
+        fi
+        sudo apt-get install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-venv" "python${REQUIRED_PYTHON}-dev" 2>/dev/null || {
+            warn "apt 패키지 없음 → 소스 빌드"
+            sudo apt-get install -y build-essential zlib1g-dev libncurses5-dev \
+                libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev \
+                libsqlite3-dev wget libbz2-dev
+            curl -fsSL "https://www.python.org/ftp/python/${REQUIRED_PYTHON}.0/Python-${REQUIRED_PYTHON}.0.tgz" -o /tmp/python.tgz
+            cd /tmp && tar xzf python.tgz && cd "Python-${REQUIRED_PYTHON}.0"
+            ./configure --enable-optimizations --prefix=/usr/local
+            make -j"$(nproc)" && sudo make altinstall
+            cd "$PROJECT_DIR" && rm -rf /tmp/python.tgz /tmp/Python-*
+        }
         python_cmd="python${REQUIRED_PYTHON}"
     elif command -v dnf &>/dev/null; then
         sudo dnf install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel" 2>/dev/null || {
