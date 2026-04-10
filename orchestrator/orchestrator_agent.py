@@ -23,9 +23,24 @@ from a2a.types import (
     TextPart,
 )
 
-from claude_agent_sdk import query, ClaudeAgentOptions, ResultMessage
 from config import OrchestratorConfig, AgentInfo
 from knowledge_store import KnowledgeStore
+from llm_provider import create_provider, LLMProvider
+
+
+_synthesizer: Optional[LLMProvider] = None
+
+
+def _get_synthesizer() -> LLMProvider:
+    """오케스트레이터 합성용 프로바이더를 반환합니다 (싱글톤).
+    환경변수 ORCHESTRATOR_PROVIDER로 설정 가능 (기본: claude-code)"""
+    global _synthesizer
+    if _synthesizer is None:
+        import os
+        provider_name = os.environ.get("ORCHESTRATOR_PROVIDER", "claude-code")
+        _synthesizer = create_provider(provider_name)
+        print(f"[오케스트레이터] 합성 프로바이더: {_synthesizer.name}")
+    return _synthesizer
 
 
 async def normalize_topic(topic: str) -> Dict[str, any]:
@@ -212,27 +227,27 @@ async def gather_opinions(
     topic: str,
     context: str = "",
 ) -> Dict[str, str]:
-    """모든 에이전트로부터 의견을 동시에 수집합니다."""
+    """모든 에이전트로부터 의견을 동시에 수집합니다. 개별 에이전트 실패는 전체를 중단하지 않습니다."""
     prompt = topic
     if context:
         prompt = f"{context}\n\n위 맥락을 참고하여 다음 주제에 대한 의견을 제시해주세요:\n{topic}"
 
     tasks = [call_agent(http_client, agent, prompt) for agent in agents]
-    results = await asyncio.gather(*tasks)
-    return {agents[i].name: results[i] for i in range(len(agents))}
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    opinions = {}
+    for i, result in enumerate(results):
+        if isinstance(result, Exception):
+            opinions[agents[i].name] = f"[{agents[i].name} 오류] {type(result).__name__}: {result}"
+            print(f"  [경고] {agents[i].name} 의견 수집 실패: {result}")
+        else:
+            opinions[agents[i].name] = result
+    return opinions
 
 
-async def synthesize_with_claude(prompt: str) -> str:
-    """Claude Agent SDK로 내용을 합성합니다."""
-    result_text = ""
-    async for message in query(
-        prompt=prompt,
-        options=ClaudeAgentOptions(allowed_tools=[]),
-    ):
-        if isinstance(message, ResultMessage):
-            result_text = message.result
-            break
-    return result_text or "(합성 실패)"
+async def synthesize_with_claude(prompt: str, timeout: float = 120.0) -> str:
+    """LLM 프로바이더로 내용을 합성합니다. timeout 초과 시 에러 대신 폴백 메시지를 반환합니다."""
+    provider = _get_synthesizer()
+    return await provider.synthesize(prompt, timeout=timeout)
 
 
 async def select_agents_for_topic(
@@ -317,7 +332,11 @@ async def run_debate_streaming(
         # 라운드 0: 초기 의견
         await event_callback("status", {"phase": "round", "message": "라운드 0: 초기 의견 수집 중..."})
         for agent in agents:
-            response = await call_agent(http_client, agent, topic)
+            try:
+                response = await call_agent(http_client, agent, topic)
+            except Exception as e:
+                response = f"[{agent.name} 오류] {type(e).__name__}: {e}"
+                print(f"  [경고] 라운드 0 - {agent.name} 실패: {e}")
             await event_callback("opinion", {"agent": agent.name, "round": 0, "opinion": response})
             history.append({"agent": agent.name, "round": 0, "opinion": response})
 
@@ -339,7 +358,11 @@ async def run_debate_streaming(
                     f"위 의견들을 참고하여 당신의 심화된 견해를 제시해주세요. "
                     f"동의하는 부분과 다른 관점이 있다면 구체적으로 설명해주세요."
                 )
-                response = await call_agent(http_client, agent, prompt)
+                try:
+                    response = await call_agent(http_client, agent, prompt)
+                except Exception as e:
+                    response = f"[{agent.name} 오류] {type(e).__name__}: {e}"
+                    print(f"  [경고] 라운드 {round_num} - {agent.name} 실패: {e}")
                 await event_callback("opinion", {"agent": agent.name, "round": round_num, "opinion": response})
                 round_opinions[agent.name] = response
             prev_opinions = round_opinions
@@ -515,10 +538,14 @@ async def run_debate(
                 )
                 tasks.append(call_agent(http_client, agent, prompt))
 
-            results = await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             for i, agent in enumerate(agents):
-                debate_opinions[agent.name] = results[i]
-                print(f"  [{agent.name}]: {results[i][:100]}...")
+                if isinstance(results[i], Exception):
+                    debate_opinions[agent.name] = f"[{agent.name} 오류] {type(results[i]).__name__}: {results[i]}"
+                    print(f"  [경고] {agent.name} 토론 실패: {results[i]}")
+                else:
+                    debate_opinions[agent.name] = results[i]
+                    print(f"  [{agent.name}]: {results[i][:100]}...")
 
             history.append({"round": round_num, "type": "debate", "opinions": debate_opinions})
 

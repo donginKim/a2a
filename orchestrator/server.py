@@ -159,6 +159,7 @@ async def register_agent(request: Request) -> JSONResponse:
         mcp_servers = body.get("mcp_servers", [])
         agent_type = body.get("agent_type", "agent")
         alias = body.get("alias", "")
+        provider = body.get("provider", "claude-code")
         if not name or not url:
             return JSONResponse({"error": "name과 url은 필수입니다"}, status_code=400)
 
@@ -168,7 +169,7 @@ async def register_agent(request: Request) -> JSONResponse:
             store.save_agent(
                 name=name, url=url, description=description,
                 skills=skills, data_paths=data_paths, mcp_servers=mcp_servers,
-                agent_type=agent_type, alias=alias,
+                agent_type=agent_type, alias=alias, provider=provider,
             )
 
         # 중복 체크 (인메모리)
@@ -181,24 +182,27 @@ async def register_agent(request: Request) -> JSONResponse:
                 agent.mcp_servers = mcp_servers
                 agent.agent_type = agent_type
                 agent.alias = alias
+                agent.provider = provider
                 return JSONResponse({
                     "message": f"에이전트 '{name}' 업데이트 완료",
                     "url": url, "skills": skills,
                     "data_paths": data_paths, "mcp_servers": mcp_servers,
                     "agent_type": agent_type, "alias": alias,
+                    "provider": provider,
                 })
 
         from config import AgentInfo
         cfg.registered_agents.append(AgentInfo(
             name=name, url=url, description=description,
             skills=skills, data_paths=data_paths, mcp_servers=mcp_servers,
-            agent_type=agent_type, alias=alias,
+            agent_type=agent_type, alias=alias, provider=provider,
         ))
         return JSONResponse({
             "message": f"에이전트 '{name}' 등록 완료",
             "url": url, "skills": skills,
             "data_paths": data_paths, "mcp_servers": mcp_servers,
             "agent_type": agent_type, "alias": alias,
+            "provider": provider,
         })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -213,6 +217,7 @@ async def list_agents(request: Request) -> JSONResponse:
                 "name": a.name, "url": a.url, "description": a.description,
                 "skills": a.skills, "data_paths": a.data_paths, "mcp_servers": a.mcp_servers,
                 "agent_type": a.agent_type, "alias": a.alias,
+                "provider": a.provider,
             }
             for a in cfg.registered_agents
         ]
@@ -344,6 +349,7 @@ async def hierarchy_info(request: Request) -> JSONResponse:
             "description": agent_info.description,
             "agent_type": agent_info.agent_type,
             "skills": agent_info.skills,
+            "provider": agent_info.provider,
             "children": [],
         }
         # 하위 오케스트레이터이면 재귀적으로 하위 구조 가져오기
@@ -477,8 +483,15 @@ async def stream_debate(request: Request):
                     break
                 event_type, data = item
                 yield f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-        except asyncio.CancelledError:
-            task.cancel()
+        except (asyncio.CancelledError, GeneratorExit):
+            pass
+        finally:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
 
     return StreamingResponse(
         event_generator(),
@@ -510,6 +523,7 @@ def create_app(config: OrchestratorConfig) -> Starlette:
                 skills=a.get("skills", []), data_paths=a.get("data_paths", []),
                 mcp_servers=a.get("mcp_servers", []),
                 agent_type=a.get("agent_type", "agent"), alias=a.get("alias", ""),
+                provider=a.get("provider", "claude-code"),
             ))
         print(f"[지식 저장소] 에이전트 {len(persisted_agents)}개 복원: {[a['name'] for a in persisted_agents]}")
 

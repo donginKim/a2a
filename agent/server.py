@@ -94,6 +94,7 @@ async def register_with_orchestrator(config: AgentConfig) -> None:
         "skills": skills,
         "data_paths": data_paths,
         "mcp_servers": mcp_servers,
+        "provider": config.provider,
     }
 
     try:
@@ -115,6 +116,7 @@ def main():
     public_url = config.public_url or f"http://localhost:{config.port}"
     print(f"에이전트 시작: {public_url}")
     print(f"에이전트 이름: {config.name}")
+    print(f"LLM 프로바이더: {config.provider}")
     print(f"데이터 디렉토리: {config.data_dir}")
 
     executor = ClaudeAgentExecutor(config)

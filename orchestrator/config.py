@@ -21,6 +21,8 @@ class AgentInfo:
     agent_type: str = "agent"
     # 대시보드 표시용 별칭 (없으면 name 사용)
     alias: str = ""
+    # LLM 프로바이더 (claude-code | claude-api | openai)
+    provider: str = "claude-code"
 
 
 @dataclass
@@ -46,6 +48,8 @@ class OrchestratorConfig:
     sub_orchestrator_timeout: float = 600.0
     # 대시보드 표시용 별칭 (없으면 name 사용)
     alias: str = ""
+    # 오케스트레이터 합성용 LLM 프로바이더 (claude-code | claude-api | openai)
+    provider: str = "claude-code"
 
 
 def load_config() -> OrchestratorConfig:
@@ -60,6 +64,7 @@ def load_config() -> OrchestratorConfig:
         skills=os.getenv("ORCHESTRATOR_SKILLS", ""),
         sub_orchestrator_timeout=float(os.getenv("SUB_ORCHESTRATOR_TIMEOUT", "600")),
         alias=os.getenv("ORCHESTRATOR_ALIAS", ""),
+        provider=os.getenv("ORCHESTRATOR_PROVIDER", "claude-code"),
     )
 
     # 에이전트 목록을 JSON 파일에서 로드

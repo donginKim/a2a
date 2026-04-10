@@ -146,6 +146,13 @@
   .tag.mcp{background:rgba(167,139,250,.15);color:var(--purple);border-color:rgba(167,139,250,.2)}
   .tag.data{background:rgba(251,191,36,.15);color:var(--orange);border-color:rgba(251,191,36,.2)}
 
+  /* provider badges */
+  .provider-badge{font-size:.58rem;padding:.1rem .35rem;border-radius:3px;font-weight:600;letter-spacing:.02em;flex-shrink:0}
+  .provider-badge.claude-code{background:rgba(251,146,60,.15);color:#fb923c;border:1px solid rgba(251,146,60,.2)}
+  .provider-badge.claude-api{background:rgba(251,146,60,.1);color:#d97706;border:1px solid rgba(251,146,60,.15)}
+  .provider-badge.openai{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.2)}
+  .node-info-provider{display:flex;align-items:center;gap:.3rem;margin-bottom:.4rem;font-size:.75rem;color:var(--text-dim)}
+
   /* markdown */
   .md h1,.md h2,.md h3{margin:1em 0 .4em;font-weight:700}
   .md h1{font-size:1.25em;color:var(--accent)}
@@ -300,6 +307,15 @@
         </select>
       </div>
       <div class="form-group">
+        <label>LLM 프로바이더</label>
+        <select id="regProvider">
+          <option value="claude-code">Claude Code (구독)</option>
+          <option value="claude-api">Claude API (API 키)</option>
+          <option value="openai">OpenAI (GPT/Codex)</option>
+        </select>
+        <div class="hint">에이전트가 사용하는 LLM 프로바이더</div>
+      </div>
+      <div class="form-group">
         <label>스킬셋</label>
         <input type="text" id="regSkills" placeholder="예: analysis,coding,finance" value="general,analysis">
         <div class="hint">쉼표로 구분</div>
@@ -343,6 +359,14 @@
         <select id="editType">
           <option value="agent">에이전트</option>
           <option value="orchestrator">오케스트레이터</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>LLM 프로바이더</label>
+        <select id="editProvider">
+          <option value="claude-code">Claude Code (구독)</option>
+          <option value="claude-api">Claude API (API 키)</option>
+          <option value="openai">OpenAI (GPT/Codex)</option>
         </select>
       </div>
       <div class="form-group">
@@ -462,6 +486,7 @@ function renderTreeNode(node,isRoot=false){
       <span class="tree-icon">${isOrch?'\u{1F3DB}':'\u{1F916}'}</span>
       <span class="tree-label" title="${esc(node.name)}">${esc(displayName)}</span>
       <span class="tree-status-text ${dotCls}">${statusLabel}</span>
+      <span class="provider-badge ${node.provider||'claude-code'}">${providerLabel(node.provider)}</span>
       <span class="tree-type-badge ${isOrch?'orch':'agent'}">${isOrch?'Orch':'Agent'}</span>
     </div>`;
 
@@ -477,6 +502,10 @@ function renderTreeNode(node,isRoot=false){
 }
 
 function esc2(jsonStr){return jsonStr.replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
+function providerLabel(p){
+  const labels={'claude-code':'Claude','claude-api':'Claude API','openai':'OpenAI'};
+  return labels[p]||p||'Claude';
+}
 
 function toggleExpand(event,childrenId,expandId){
   event.stopPropagation();
@@ -537,10 +566,12 @@ function renderNodeInfo(node){
   if(!node&&hierarchy)node=hierarchy;
   if(!node){panel.innerHTML='';return;}
   const skills=(node.skills||[]).map(s=>`<span class="tag">${esc(s)}</span>`).join('');
+  const prov=node.provider||'claude-code';
   panel.innerHTML=`<div class="node-info">
     <div class="node-info-title">선택된 노드</div>
     <div class="node-info-name">${esc(node.alias||node.name)}</div>
     ${node.description?`<div class="node-info-desc">${esc(node.description)}</div>`:''}
+    <div class="node-info-provider">LLM: <span class="provider-badge ${prov}">${providerLabel(prov)}</span></div>
     ${node.url?`<div class="node-info-url">${esc(node.url)}</div>`:''}
     ${skills?`<div class="node-info-tags">${skills}</div>`:''}
   </div>`;
@@ -739,6 +770,7 @@ async function doRegister(){
   const url=$('regUrl').value.trim();
   const desc=$('regDesc').value.trim();
   const type=$('regType').value;
+  const provider=$('regProvider').value;
   const skills=$('regSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
   const result=$('regResult');
   if(!name||!url){result.className='form-result error';result.textContent='이름과 URL은 필수입니다.';return;}
@@ -747,7 +779,7 @@ async function doRegister(){
   try{
     const res=await fetch('/agents/register',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name,url,description:desc,skills,agent_type:type,alias})
+      body:JSON.stringify({name,url,description:desc,skills,agent_type:type,alias,provider})
     });
     const data=await res.json();
     if(res.ok){
@@ -769,6 +801,7 @@ function openEditModalForNode(node){
   $('editUrl').value=node.url||'';
   $('editDesc').value=node.description||'';
   $('editType').value=node.agent_type||'agent';
+  $('editProvider').value=node.provider||'claude-code';
   $('editSkills').value=(node.skills||[]).join(',');
   $('editTitle').textContent=(node.alias||node.name)+' 수정';
   $('editResult').className='form-result';
@@ -781,11 +814,12 @@ async function saveAgent(){
   const alias=$('editAlias').value.trim();
   const desc=$('editDesc').value.trim();
   const type=$('editType').value;
+  const provider=$('editProvider').value;
   const skills=$('editSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
   try{
     const res=await fetch('/agents/register',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({name,url,description:desc,skills,agent_type:type,alias})
+      body:JSON.stringify({name,url,description:desc,skills,agent_type:type,alias,provider})
     });
     const data=await res.json();
     if(res.ok){
