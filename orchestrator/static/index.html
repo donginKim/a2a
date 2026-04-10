@@ -11,116 +11,101 @@
     --text:#e4e6f0;--text-dim:#8b8fa3;--accent:#6c8cff;--accent-dim:#4a62b3;
     --green:#34d399;--red:#f87171;--orange:#fbbf24;--purple:#a78bfa;
     --radius:10px;--shadow:0 2px 12px rgba(0,0,0,.4);
+    --sidebar-w:300px;
   }
   html{font-size:15px}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
 
-  .container{max-width:1200px;margin:0 auto;padding:1.2rem;display:grid;gap:1.2rem;grid-template-rows:auto auto auto 1fr}
+  /* layout: sidebar + main */
+  .app-layout{display:flex;height:100vh;overflow:hidden}
 
-  /* header */
-  header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6rem}
-  header h1{font-size:1.4rem;font-weight:700;letter-spacing:-.02em}
-  header h1 span{color:var(--accent)}
+  /* sidebar */
+  .sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+  .sidebar-header{padding:1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .sidebar-header h1{font-size:1.15rem;font-weight:700;letter-spacing:-.02em}
+  .sidebar-header h1 span{color:var(--accent)}
+  .sidebar-actions{display:flex;gap:.4rem}
+  .sidebar-actions button{font-size:.7rem;padding:.25rem .5rem;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;transition:all .2s}
+  .sidebar-actions button:hover{border-color:var(--accent);color:var(--accent)}
+
+  .sidebar-body{flex:1;overflow-y:auto;padding:.6rem}
+  .sidebar-body::-webkit-scrollbar{width:5px}
+  .sidebar-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+  .sidebar-footer{padding:.6rem 1rem;border-top:1px solid var(--border);display:flex;gap:.4rem}
+  .sidebar-footer button{flex:1;font-size:.75rem;padding:.4rem;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;transition:all .2s}
+  .sidebar-footer button:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* tree */
+  .tree-node{margin-bottom:2px}
+  .tree-row{display:flex;align-items:center;gap:.4rem;padding:.4rem .5rem;border-radius:6px;cursor:pointer;transition:all .15s;font-size:.82rem;position:relative}
+  .tree-row:hover{background:var(--surface2)}
+  .tree-row.selected{background:rgba(108,140,255,.15);border:1px solid rgba(108,140,255,.25)}
+  .tree-row .expand-btn{width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--text-dim);transition:transform .2s;flex-shrink:0}
+  .tree-row .expand-btn.open{transform:rotate(90deg)}
+  .tree-row .expand-btn.hidden{visibility:hidden}
+  .tree-icon{font-size:.85rem;flex-shrink:0}
+  .tree-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+  .tree-type-badge{font-size:.58rem;padding:.1rem .3rem;border-radius:3px;font-weight:600;flex-shrink:0}
+  .tree-type-badge.orch{background:rgba(167,139,250,.15);color:var(--purple)}
+  .tree-type-badge.agent{background:rgba(52,211,153,.15);color:var(--green)}
+  .tree-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .tree-dot.online{background:var(--green)}
+  .tree-dot.offline{background:var(--red)}
+  .tree-dot.unknown{background:var(--text-dim)}
+  .tree-children{padding-left:1.1rem;overflow:hidden;transition:max-height .25s ease}
+  .tree-children.collapsed{max-height:0 !important}
+
+  .tree-empty{color:var(--text-dim);font-size:.8rem;text-align:center;padding:2rem .5rem}
+
+  /* node info panel */
+  .node-info{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.7rem;margin-top:.6rem}
+  .node-info-title{font-size:.75rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-bottom:.4rem}
+  .node-info-name{font-size:.95rem;font-weight:700;margin-bottom:.2rem}
+  .node-info-desc{font-size:.78rem;color:var(--text-dim);margin-bottom:.4rem}
+  .node-info-url{font-size:.68rem;color:var(--text-dim);word-break:break-all;margin-bottom:.3rem}
+  .node-info-tags{display:flex;flex-wrap:wrap;gap:.25rem}
+
+  /* main */
+  .main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .main-header{padding:.8rem 1.2rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:.6rem;background:var(--surface)}
+  .main-header .target-label{font-size:.85rem;color:var(--text-dim)}
+  .main-header .target-name{font-weight:700;color:var(--text);font-size:1rem;margin-left:.4rem}
+  .main-header .target-badge{font-size:.65rem;padding:.15rem .4rem;border-radius:4px;margin-left:.4rem}
+  .main-header .target-badge.orch{background:rgba(167,139,250,.15);color:var(--purple)}
+  .main-header .target-badge.agent{background:rgba(52,211,153,.15);color:var(--green)}
   .header-right{display:flex;align-items:center;gap:.6rem}
-  .status-pill{display:flex;align-items:center;gap:.45rem;font-size:.8rem;padding:.3rem .75rem;border-radius:20px;background:var(--surface);border:1px solid var(--border)}
+  .status-pill{display:flex;align-items:center;gap:.45rem;font-size:.8rem;padding:.3rem .75rem;border-radius:20px;background:var(--surface2);border:1px solid var(--border)}
   .status-dot{width:8px;height:8px;border-radius:50%;background:var(--red);transition:background .3s}
   .status-dot.ok{background:var(--green);animation:pulse-green 2s infinite}
   @keyframes pulse-green{0%,100%{box-shadow:0 0 0 0 rgba(52,211,153,.4)}50%{box-shadow:0 0 0 6px rgba(52,211,153,0)}}
-  .btn-health{font-size:.75rem;padding:.3rem .7rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text-dim);cursor:pointer;transition:all .2s}
-  .btn-health:hover{border-color:var(--accent);color:var(--accent)}
-
-  /* agents panel */
-  .agents-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem;overflow-x:auto}
-  .agents-panel h2{font-size:.9rem;color:var(--text-dim);margin-bottom:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-  .agents-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:.7rem}
-  .agent-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem;transition:border-color .2s,transform .15s;position:relative}
-  .agent-card:hover{border-color:var(--accent-dim);transform:translateY(-1px);cursor:pointer}
-  .agent-name{font-weight:700;font-size:.95rem;margin-bottom:.35rem;display:flex;align-items:center;gap:.4rem}
-  .agent-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text-dim);flex-shrink:0}
-  .agent-dot.online{background:var(--green)}
-  .agent-dot.offline{background:var(--red)}
-  .agent-dot.unknown{background:var(--text-dim)}
-  .agent-url{font-size:.72rem;color:var(--text-dim);margin-bottom:.45rem;word-break:break-all}
-  .agent-status-text{font-size:.65rem;position:absolute;top:.6rem;right:.6rem;padding:.1rem .4rem;border-radius:3px}
-  .agent-status-text.online{color:var(--green);background:rgba(52,211,153,.1)}
-  .agent-status-text.offline{color:var(--red);background:rgba(248,113,113,.1)}
-  .tag-row{display:flex;flex-wrap:wrap;gap:.3rem;margin-bottom:.3rem}
-  .tag{font-size:.68rem;padding:.15rem .45rem;border-radius:4px;background:rgba(108,140,255,.15);color:var(--accent);border:1px solid rgba(108,140,255,.2)}
-  .tag.mcp{background:rgba(167,139,250,.15);color:var(--purple);border-color:rgba(167,139,250,.2)}
-  .tag.data{background:rgba(251,191,36,.15);color:var(--orange);border-color:rgba(251,191,36,.2)}
-  .section-label{font-size:.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-top:.25rem;margin-bottom:.15rem}
-  .no-agents{color:var(--text-dim);font-size:.85rem;text-align:center;padding:1.5rem}
-  .agent-card.add-card{border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.5rem;cursor:pointer;min-height:120px;color:var(--text-dim);transition:all .2s}
-  .agent-card.add-card:hover{border-color:var(--accent);color:var(--accent);transform:translateY(-1px)}
-  .agent-card.add-card .add-icon{font-size:1.8rem;line-height:1}
-  .agent-card.add-card .add-label{font-size:.82rem;font-weight:600}
-
-  /* modal */
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:center;justify-content:center;padding:1rem}
-  .modal-overlay.open{display:flex}
-  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow)}
-  .modal-header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.2rem;border-bottom:1px solid var(--border)}
-  .modal-header h3{font-size:1rem;font-weight:700}
-  .modal-close{background:none;border:none;color:var(--text-dim);font-size:1.3rem;cursor:pointer;padding:.2rem .5rem;border-radius:4px}
-  .modal-close:hover{color:var(--text);background:var(--surface2)}
-  .modal-body{padding:1.2rem}
-  .modal-tabs{display:flex;gap:0;margin-bottom:1rem;border-bottom:1px solid var(--border)}
-  .modal-tab{padding:.5rem 1rem;font-size:.82rem;font-weight:600;cursor:pointer;color:var(--text-dim);border-bottom:2px solid transparent;transition:all .2s}
-  .modal-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-  .modal-panel{display:none}
-  .modal-panel.active{display:block}
-  .form-group{margin-bottom:.8rem}
-  .form-group label{display:block;font-size:.78rem;font-weight:600;color:var(--text-dim);margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.04em}
-  .form-group input,.form-group textarea{width:100%;padding:.5rem .7rem;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem;outline:none;font-family:inherit;transition:border-color .2s}
-  .form-group input:focus,.form-group textarea:focus{border-color:var(--accent)}
-  .form-group input::placeholder,.form-group textarea::placeholder{color:var(--text-dim)}
-  .form-group textarea{resize:vertical;min-height:60px}
-  .form-group .hint{font-size:.7rem;color:var(--text-dim);margin-top:.2rem}
-  .form-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border)}
-  .form-result{margin-top:.8rem;padding:.6rem .8rem;border-radius:6px;font-size:.82rem;display:none}
-  .form-result.success{display:block;background:rgba(52,211,153,.1);color:var(--green);border:1px solid rgba(52,211,153,.2)}
-  .form-result.error{display:block;background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.2)}
-  .setup-step{display:flex;gap:.7rem;margin-bottom:.8rem;align-items:flex-start}
-  .setup-num{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-  .setup-content{flex:1}
-  .setup-content .title{font-size:.85rem;font-weight:600;margin-bottom:.2rem}
-  .setup-content .desc{font-size:.78rem;color:var(--text-dim)}
-  .setup-content code{background:var(--surface2);padding:.2rem .5rem;border-radius:4px;font-size:.78rem;display:block;margin-top:.3rem;color:var(--accent);cursor:pointer;word-break:break-all;border:1px solid var(--border)}
-  .setup-content code:hover{border-color:var(--accent)}
-  .copied-toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);background:var(--green);color:#000;padding:.4rem 1rem;border-radius:6px;font-size:.8rem;font-weight:600;z-index:200;opacity:0;transition:opacity .3s}
-  .copied-toast.show{opacity:1}
 
   /* input section */
-  .input-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1rem}
-  .input-section h2{font-size:.9rem;color:var(--text-dim);margin-bottom:.7rem;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-  .input-row{display:flex;gap:.6rem;flex-wrap:wrap}
-  .input-row input{flex:1;min-width:200px;padding:.6rem .9rem;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.9rem;outline:none;transition:border-color .2s}
+  .input-section{padding:.8rem 1.2rem;border-bottom:1px solid var(--border);background:var(--surface)}
+  .input-row{display:flex;gap:.5rem}
+  .input-row input{flex:1;padding:.55rem .8rem;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.88rem;outline:none;transition:border-color .2s}
   .input-row input:focus{border-color:var(--accent)}
   .input-row input::placeholder{color:var(--text-dim)}
-  .btn{padding:.6rem 1.2rem;border-radius:8px;border:none;font-size:.85rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
+  .btn{padding:.55rem 1rem;border-radius:8px;border:none;font-size:.82rem;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap}
   .btn:disabled{opacity:.5;cursor:not-allowed}
   .btn-primary{background:var(--accent);color:#fff}
   .btn-primary:hover:not(:disabled){background:#5a7aee;transform:translateY(-1px)}
   .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
   .btn-secondary:hover:not(:disabled){background:var(--border);transform:translateY(-1px)}
+  .input-hint{font-size:.7rem;color:var(--text-dim);margin-top:.3rem}
 
   /* tabs */
-  .tabs{display:flex;gap:0;margin-bottom:0}
-  .tab{padding:.5rem 1rem;font-size:.82rem;font-weight:600;cursor:pointer;border:1px solid var(--border);border-bottom:none;border-radius:8px 8px 0 0;background:var(--surface2);color:var(--text-dim);transition:all .2s;margin-right:2px}
-  .tab.active{background:var(--surface);color:var(--text);border-color:var(--border);position:relative}
-  .tab.active::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;background:var(--surface)}
-  .tab .tab-count{font-size:.7rem;background:var(--border);padding:.1rem .4rem;border-radius:8px;margin-left:.3rem}
+  .tabs-bar{display:flex;gap:0;padding:0 1.2rem;background:var(--surface);border-bottom:1px solid var(--border)}
+  .tab{padding:.5rem 1rem;font-size:.8rem;font-weight:600;cursor:pointer;color:var(--text-dim);border-bottom:2px solid transparent;transition:all .2s}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .tab .tab-count{font-size:.68rem;background:var(--surface2);padding:.1rem .35rem;border-radius:8px;margin-left:.3rem}
 
-  /* output section */
-  .output-section{background:var(--surface);border:1px solid var(--border);border-radius:0 var(--radius) var(--radius) var(--radius);padding:1rem;display:flex;flex-direction:column;min-height:350px;max-height:calc(100vh - 480px);overflow:hidden}
-  .output-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.7rem}
-  .output-header h2{font-size:.9rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
-  .btn-clear{font-size:.72rem;padding:.25rem .6rem;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer}
-  .btn-clear:hover{color:var(--text);border-color:var(--text-dim)}
-  .output-body{flex:1;overflow-y:auto;padding-right:.3rem;scroll-behavior:smooth}
-  .output-body::-webkit-scrollbar{width:5px}
-  .output-body::-webkit-scrollbar-track{background:transparent}
-  .output-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  /* output */
+  .output-area{flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .output-panel{flex:1;overflow-y:auto;padding:1rem 1.2rem;display:none}
+  .output-panel.active{display:block}
+  .output-panel::-webkit-scrollbar{width:5px}
+  .output-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
   /* output items */
   .out-item{margin-bottom:.7rem;animation:fadeIn .3s ease}
@@ -128,18 +113,17 @@
   .out-status{display:flex;align-items:center;gap:.5rem;padding:.5rem .7rem;border-radius:6px;background:rgba(108,140,255,.08);border-left:3px solid var(--accent);font-size:.82rem;color:var(--accent)}
   .out-status.phase-complete{border-left-color:var(--green);color:var(--green);background:rgba(52,211,153,.08)}
   .out-status.phase-error{border-left-color:var(--red);color:var(--red);background:rgba(248,113,113,.08)}
-  .out-opinion{padding:.6rem .8rem;border-radius:6px;background:var(--surface2);border:1px solid var(--border)}
+  .out-opinion{padding:.6rem .8rem;border-radius:6px;background:var(--surface);border:1px solid var(--border)}
   .out-opinion .agent-label{font-size:.75rem;font-weight:700;color:var(--purple);margin-bottom:.3rem;display:flex;align-items:center;gap:.35rem}
-  .out-opinion .agent-label .round-tag{font-size:.65rem;color:var(--text-dim);font-weight:400;background:var(--surface);padding:.1rem .35rem;border-radius:3px}
-  .out-opinion .opinion-text{font-size:.83rem;line-height:1.65;color:var(--text)}
-  .out-report{padding:.8rem;border-radius:6px;background:var(--surface2);border:1px solid var(--green);border-left:3px solid var(--green)}
+  .out-opinion .agent-label .round-tag{font-size:.65rem;color:var(--text-dim);font-weight:400;background:var(--surface2);padding:.1rem .35rem;border-radius:3px}
+  .out-report{padding:.8rem;border-radius:6px;background:var(--surface);border:1px solid var(--green);border-left:3px solid var(--green)}
   .out-report .report-label{font-size:.75rem;font-weight:700;color:var(--green);margin-bottom:.5rem}
   .out-report .report-path{font-size:.7rem;color:var(--text-dim);margin-top:.5rem}
-  .out-response{padding:.8rem;border-radius:6px;background:var(--surface2);border:1px solid var(--border);border-left:3px solid var(--accent)}
+  .out-response{padding:.8rem;border-radius:6px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent)}
   .out-response .resp-agent{font-size:.75rem;font-weight:700;color:var(--accent);margin-bottom:.4rem}
 
   /* history items */
-  .history-item{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem;margin-bottom:.6rem;cursor:pointer;transition:all .2s}
+  .history-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:.8rem;margin-bottom:.6rem;cursor:pointer;transition:all .2s}
   .history-item:hover{border-color:var(--accent-dim);transform:translateY(-1px)}
   .history-meta{display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem}
   .history-type{font-size:.68rem;padding:.15rem .45rem;border-radius:4px;font-weight:600}
@@ -150,7 +134,13 @@
   .history-preview{font-size:.78rem;color:var(--text-dim);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .history-detail{display:none;margin-top:.6rem;padding-top:.6rem;border-top:1px solid var(--border)}
   .history-detail.open{display:block}
+
+  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-dim);gap:.5rem;font-size:.85rem;text-align:center;padding:2rem}
   .no-history{color:var(--text-dim);font-size:.85rem;text-align:center;padding:2rem}
+
+  .tag{font-size:.68rem;padding:.15rem .45rem;border-radius:4px;background:rgba(108,140,255,.15);color:var(--accent);border:1px solid rgba(108,140,255,.2)}
+  .tag.mcp{background:rgba(167,139,250,.15);color:var(--purple);border-color:rgba(167,139,250,.2)}
+  .tag.data{background:rgba(251,191,36,.15);color:var(--orange);border-color:rgba(251,191,36,.2)}
 
   /* markdown */
   .md h1,.md h2,.md h3{margin:1em 0 .4em;font-weight:700}
@@ -173,228 +163,193 @@
 
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-  .loading-bar{height:2px;background:linear-gradient(90deg,var(--accent),var(--purple),var(--accent));background-size:200% 100%;animation:shimmer 1.5s ease infinite;border-radius:1px;margin-bottom:.5rem;display:none}
+  .loading-bar{height:2px;background:linear-gradient(90deg,var(--accent),var(--purple),var(--accent));background-size:200% 100%;animation:shimmer 1.5s ease infinite;border-radius:1px;display:none}
   .loading-bar.active{display:block}
   @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-  .empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-dim);gap:.5rem;font-size:.85rem;text-align:center;padding:2rem}
 
-  @media(max-width:640px){
-    .container{padding:.7rem;gap:.7rem}
+  /* modals */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:none;align-items:center;justify-content:center;padding:1rem}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);width:100%;max-width:540px;max-height:90vh;overflow-y:auto;box-shadow:var(--shadow)}
+  .modal-header{display:flex;justify-content:space-between;align-items:center;padding:1rem 1.2rem;border-bottom:1px solid var(--border)}
+  .modal-header h3{font-size:1rem;font-weight:700}
+  .modal-close{background:none;border:none;color:var(--text-dim);font-size:1.3rem;cursor:pointer;padding:.2rem .5rem;border-radius:4px}
+  .modal-close:hover{color:var(--text);background:var(--surface2)}
+  .modal-body{padding:1.2rem}
+  .form-group{margin-bottom:.8rem}
+  .form-group label{display:block;font-size:.78rem;font-weight:600;color:var(--text-dim);margin-bottom:.3rem;text-transform:uppercase;letter-spacing:.04em}
+  .form-group input,.form-group select{width:100%;padding:.5rem .7rem;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:.85rem;outline:none;font-family:inherit;transition:border-color .2s}
+  .form-group input:focus,.form-group select:focus{border-color:var(--accent)}
+  .form-group input::placeholder{color:var(--text-dim)}
+  .form-group .hint{font-size:.7rem;color:var(--text-dim);margin-top:.2rem}
+  .form-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem;padding-top:.8rem;border-top:1px solid var(--border)}
+  .form-result{margin-top:.8rem;padding:.6rem .8rem;border-radius:6px;font-size:.82rem;display:none}
+  .form-result.success{display:block;background:rgba(52,211,153,.1);color:var(--green);border:1px solid rgba(52,211,153,.2)}
+  .form-result.error{display:block;background:rgba(248,113,113,.1);color:var(--red);border:1px solid rgba(248,113,113,.2)}
+
+  .copied-toast{position:fixed;bottom:2rem;left:50%;transform:translateX(-50%);background:var(--green);color:#000;padding:.4rem 1rem;border-radius:6px;font-size:.8rem;font-weight:600;z-index:200;opacity:0;transition:opacity .3s}
+  .copied-toast.show{opacity:1}
+
+  /* responsive */
+  @media(max-width:768px){
+    .app-layout{flex-direction:column}
+    .sidebar{width:100%;min-width:0;max-height:40vh;border-right:none;border-bottom:1px solid var(--border)}
     .input-row{flex-direction:column}
-    .input-row input{min-width:0}
     .btn{width:100%}
-    .agents-grid{grid-template-columns:1fr}
-    .output-section{max-height:none;min-height:250px}
-    header h1{font-size:1.15rem}
   }
 </style>
 </head>
 <body>
-<div class="container">
-  <header>
-    <h1><span>A2A</span> Orchestrator</h1>
-    <div class="header-right">
-      <button class="btn-health" onclick="runHealthcheck()">헬스체크</button>
-      <div class="status-pill">
-        <div class="status-dot" id="statusDot"></div>
-        <span id="statusText">연결 확인 중...</span>
+<div class="app-layout">
+  <!-- Sidebar: Hierarchy Tree -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h1><span>A2A</span> Hierarchy</h1>
+      <div class="sidebar-actions">
+        <button onclick="refreshHierarchy()">새로고침</button>
+        <button onclick="runHealthcheck()">헬스체크</button>
       </div>
     </div>
-  </header>
-
-  <section class="agents-panel">
-    <h2>등록된 에이전트</h2>
-    <div class="agents-grid" id="agentsGrid">
-      <div class="no-agents">에이전트를 불러오는 중...</div>
+    <div class="sidebar-body" id="treeContainer">
+      <div class="tree-empty">계층 구조를 불러오는 중...</div>
     </div>
-  </section>
-
-  <section class="input-section">
-    <h2>주제 입력</h2>
-    <div class="input-row">
-      <input type="text" id="topicInput" placeholder="토론 주제 또는 질문을 입력하세요..." autocomplete="off">
-      <button class="btn btn-secondary" id="btnQuery" onclick="doQuery()">질문하기</button>
-      <button class="btn btn-primary" id="btnDebate" onclick="doDebate()">토론 시작</button>
+    <div id="nodeInfoPanel"></div>
+    <div class="sidebar-footer">
+      <button onclick="openRegisterModal()">+ 에이전트 등록</button>
+      <button onclick="openRegisterModal('orchestrator')">+ 오케스트레이터 등록</button>
     </div>
-  </section>
+  </aside>
 
-  <div>
-    <div class="tabs">
+  <!-- Main Content -->
+  <div class="main">
+    <div class="main-header">
+      <div>
+        <span class="target-label">대상:</span>
+        <span class="target-name" id="targetName">전체 (이 오케스트레이터)</span>
+        <span class="target-badge orch" id="targetBadge">orchestrator</span>
+      </div>
+      <div class="header-right">
+        <div class="status-pill">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">연결 확인 중...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-section">
+      <div class="input-row">
+        <input type="text" id="topicInput" placeholder="토론 주제 또는 질문을 입력하세요..." autocomplete="off">
+        <button class="btn btn-secondary" id="btnQuery" onclick="doQuery()">질문</button>
+        <button class="btn btn-primary" id="btnDebate" onclick="doDebate()">토론</button>
+      </div>
+      <div class="input-hint" id="inputHint">Enter로 토론 시작 / 선택된 노드에 대해 질의합니다</div>
+    </div>
+
+    <div class="loading-bar" id="loadingBar"></div>
+
+    <div class="tabs-bar">
       <div class="tab active" onclick="switchTab('live')" id="tabLive">실시간</div>
       <div class="tab" onclick="switchTab('history')" id="tabHistory">토론 내역 <span class="tab-count" id="historyCount">0</span></div>
     </div>
-    <section class="output-section" id="livePanel">
-      <div class="output-header">
-        <h2>결과</h2>
-        <button class="btn-clear" onclick="clearOutput()">지우기</button>
+
+    <div class="output-area">
+      <div class="output-panel active" id="livePanel">
+        <div class="empty-state" id="emptyState">사이드바에서 노드를 선택하고 주제를 입력하세요</div>
       </div>
-      <div class="loading-bar" id="loadingBar"></div>
-      <div class="output-body" id="outputBody">
-        <div class="empty-state">주제를 입력하고 질문하기 또는 토론 시작을 눌러주세요</div>
-      </div>
-    </section>
-    <section class="output-section" id="historyPanel" style="display:none">
-      <div class="output-header">
-        <h2>토론 내역</h2>
-        <button class="btn-clear" onclick="loadReports()">새로고침</button>
-      </div>
-      <div class="output-body" id="historyBody">
+      <div class="output-panel" id="historyPanel">
         <div class="no-history">내역을 불러오는 중...</div>
       </div>
-    </section>
+    </div>
   </div>
 </div>
 
-<!-- Connect Modal -->
-<div class="modal-overlay" id="connectModal" onclick="if(event.target===this)closeModal()">
+<!-- Register Modal -->
+<div class="modal-overlay" id="registerModal" onclick="if(event.target===this)closeRegisterModal()">
   <div class="modal">
     <div class="modal-header">
-      <h3>내 PC 연결하기</h3>
-      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <h3 id="regModalTitle">에이전트 등록</h3>
+      <button class="modal-close" onclick="closeRegisterModal()">&times;</button>
     </div>
     <div class="modal-body">
-      <div class="modal-tabs">
-        <div class="modal-tab active" onclick="switchModalTab('register')">바로 등록</div>
-        <div class="modal-tab" onclick="switchModalTab('setup')">처음부터 설치</div>
+      <div class="form-group">
+        <label>이름 (고유 ID) *</label>
+        <input type="text" id="regName" placeholder="예: team-a-agent-1">
       </div>
-
-      <!-- Tab: 바로 등록 -->
-      <div class="modal-panel active" id="panelRegister">
-        <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:.8rem">
-          이미 에이전트가 실행 중이라면 아래 정보를 입력하세요.
-        </p>
-        <div class="form-group">
-          <label>에이전트 이름 *</label>
-          <input type="text" id="regName" placeholder="예: 홍길동-agent">
-        </div>
-        <div class="form-group">
-          <label>터널 URL *</label>
-          <input type="text" id="regUrl" placeholder="예: https://xxx-xxx.trycloudflare.com">
-          <div class="hint">start_agent_with_tunnel.sh 실행 시 표시되는 URL</div>
-        </div>
-        <div class="form-group">
-          <label>설명</label>
-          <input type="text" id="regDesc" placeholder="예: 데이터 분석 전문 에이전트">
-        </div>
-        <div class="form-group">
-          <label>스킬셋</label>
-          <input type="text" id="regSkills" placeholder="예: analysis,coding,finance" value="general,analysis">
-          <div class="hint">쉼표로 구분</div>
-        </div>
-        <div class="form-group">
-          <label>데이터 경로</label>
-          <input type="text" id="regData" placeholder="예: /Users/me/data,/Users/me/reports">
-          <div class="hint">에이전트가 참고할 로컬 폴더 경로 (쉼표로 구분)</div>
-        </div>
-        <div class="form-group">
-          <label>MCP 서버</label>
-          <input type="text" id="regMcp" placeholder="예: github,slack,filesystem">
-          <div class="hint">쉼표로 구분</div>
-        </div>
-        <div class="form-result" id="regResult"></div>
-        <div class="form-actions">
-          <button class="btn btn-secondary" onclick="closeModal()">취소</button>
-          <button class="btn btn-primary" onclick="registerAgent()" id="btnRegister">등록하기</button>
-        </div>
+      <div class="form-group">
+        <label>별칭 (표시명)</label>
+        <input type="text" id="regAlias" placeholder="예: 팀A 에이전트">
+        <div class="hint">대시보드에 표시될 이름. 비우면 이름 사용</div>
       </div>
-
-      <!-- Tab: 처음부터 설치 -->
-      <div class="modal-panel" id="panelSetup">
-        <p style="font-size:.82rem;color:var(--text-dim);margin-bottom:1rem">
-          Mac에서 처음 설치하는 경우 아래 순서대로 진행하세요.
-        </p>
-        <div class="setup-step">
-          <div class="setup-num">1</div>
-          <div class="setup-content">
-            <div class="title">프로젝트 클론</div>
-            <code onclick="copyText(this)">git clone &lt;repo-url&gt; && cd a2a</code>
-          </div>
-        </div>
-        <div class="setup-step">
-          <div class="setup-num">2</div>
-          <div class="setup-content">
-            <div class="title">자동 설치 스크립트 실행</div>
-            <div class="desc">Python, Node.js, Claude Code CLI, cloudflared 등 자동 설치</div>
-            <code onclick="copyText(this)">bash scripts/install_agent.sh</code>
-          </div>
-        </div>
-        <div class="setup-step">
-          <div class="setup-num">3</div>
-          <div class="setup-content">
-            <div class="title">Claude Code 로그인</div>
-            <div class="desc">본인 Claude 구독 계정으로 로그인</div>
-            <code onclick="copyText(this)">claude</code>
-          </div>
-        </div>
-        <div class="setup-step">
-          <div class="setup-num">4</div>
-          <div class="setup-content">
-            <div class="title">참고 데이터 넣기</div>
-            <div class="desc">에이전트가 참고할 파일(PDF, CSV, MD 등)을 data 폴더에 복사</div>
-            <code onclick="copyText(this)">cp ~/내자료/* agent/data/</code>
-          </div>
-        </div>
-        <div class="setup-step">
-          <div class="setup-num">5</div>
-          <div class="setup-content">
-            <div class="title">에이전트 + 터널 시작</div>
-            <div class="desc">자동으로 터널 URL 생성 + 오케스트레이터 등록</div>
-            <code onclick="copyText(this)">cd tunnel && bash start_agent_with_tunnel.sh</code>
-          </div>
-        </div>
-        <div class="setup-step">
-          <div class="setup-num">6</div>
-          <div class="setup-content">
-            <div class="title">확인</div>
-            <div class="desc">이 대시보드에서 내 에이전트가 online으로 표시되면 완료!</div>
-          </div>
-        </div>
+      <div class="form-group">
+        <label>URL *</label>
+        <input type="text" id="regUrl" placeholder="예: https://xxx.trycloudflare.com">
+      </div>
+      <div class="form-group">
+        <label>설명</label>
+        <input type="text" id="regDesc" placeholder="예: 데이터 분석 전문">
+      </div>
+      <div class="form-group">
+        <label>유형</label>
+        <select id="regType">
+          <option value="agent">에이전트 (Agent)</option>
+          <option value="orchestrator">오케스트레이터 (Orchestrator)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>스킬셋</label>
+        <input type="text" id="regSkills" placeholder="예: analysis,coding,finance" value="general,analysis">
+        <div class="hint">쉼표로 구분</div>
+      </div>
+      <div class="form-result" id="regResult"></div>
+      <div class="form-actions">
+        <button class="btn btn-secondary" onclick="closeRegisterModal()">취소</button>
+        <button class="btn btn-primary" onclick="doRegister()" id="btnRegister">등록</button>
       </div>
     </div>
   </div>
 </div>
-<!-- Edit Agent Modal -->
+
+<!-- Edit Modal -->
 <div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeEditModal()">
   <div class="modal">
     <div class="modal-header">
-      <h3 id="editTitle">에이전트 수정</h3>
+      <h3 id="editTitle">수정</h3>
       <button class="modal-close" onclick="closeEditModal()">&times;</button>
     </div>
     <div class="modal-body">
       <input type="hidden" id="editOrigName">
       <div class="form-group">
-        <label>에이전트 이름</label>
+        <label>이름</label>
         <input type="text" id="editName" disabled style="opacity:.6">
+      </div>
+      <div class="form-group">
+        <label>별칭</label>
+        <input type="text" id="editAlias" placeholder="표시명">
       </div>
       <div class="form-group">
         <label>URL</label>
         <input type="text" id="editUrl" disabled style="opacity:.6">
-        <div class="hint">URL은 터널 재시작 시 자동 갱신됩니다</div>
       </div>
       <div class="form-group">
         <label>설명</label>
-        <input type="text" id="editDesc" placeholder="에이전트 설명">
+        <input type="text" id="editDesc">
+      </div>
+      <div class="form-group">
+        <label>유형</label>
+        <select id="editType">
+          <option value="agent">에이전트</option>
+          <option value="orchestrator">오케스트레이터</option>
+        </select>
       </div>
       <div class="form-group">
         <label>스킬셋</label>
-        <input type="text" id="editSkills" placeholder="예: analysis,coding,finance">
-        <div class="hint">쉼표로 구분. 오케스트레이터가 주제에 맞는 에이전트 선택 시 사용</div>
-      </div>
-      <div class="form-group">
-        <label>데이터 경로</label>
-        <input type="text" id="editData" placeholder="예: /Users/me/data">
-        <div class="hint">쉼표로 구분</div>
-      </div>
-      <div class="form-group">
-        <label>MCP 서버</label>
-        <input type="text" id="editMcp" placeholder="예: github,slack">
-        <div class="hint">쉼표로 구분</div>
+        <input type="text" id="editSkills" placeholder="쉼표 구분">
       </div>
       <div class="form-result" id="editResult"></div>
       <div class="form-actions">
-        <button class="btn btn-secondary" onclick="deleteAgent()" id="btnDelete" style="margin-right:auto;color:var(--red);border-color:var(--red)">삭제</button>
+        <button class="btn btn-secondary" onclick="deleteAgent()" style="margin-right:auto;color:var(--red);border-color:var(--red)">삭제</button>
         <button class="btn btn-secondary" onclick="closeEditModal()">취소</button>
-        <button class="btn btn-primary" onclick="saveAgent()" id="btnSave">저장</button>
+        <button class="btn btn-primary" onclick="saveAgent()">저장</button>
       </div>
     </div>
   </div>
@@ -402,304 +357,357 @@
 <div class="copied-toast" id="copiedToast">복사됨!</div>
 
 <script>
+// --- Helpers ---
 function renderMd(text) {
   if (!text) return '';
   let html = text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code.trim()}</code></pre>`)
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/^---+$/gm, '<hr>')
-    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
-    .replace(/^[\-\*] (.+)$/gm, '<li>$1</li>')
-    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
-    .replace(/^\|(.+)\|$/gm, (match, inner) => {
-      const cells = inner.split('|').map(c => c.trim());
-      if (cells.every(c => /^[\-:]+$/.test(c))) return '<!--sep-->';
-      return '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/```(\w*)\n([\s\S]*?)```/g,(_,l,c)=>`<pre><code>${c.trim()}</code></pre>`)
+    .replace(/`([^`]+)`/g,'<code>$1</code>')
+    .replace(/^### (.+)$/gm,'<h3>$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2>$1</h2>')
+    .replace(/^# (.+)$/gm,'<h1>$1</h1>')
+    .replace(/\*\*\*(.+?)\*\*\*/g,'<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/^---+$/gm,'<hr>')
+    .replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>')
+    .replace(/^[\-\*] (.+)$/gm,'<li>$1</li>')
+    .replace(/^\d+\. (.+)$/gm,'<li>$1</li>')
+    .replace(/^\|(.+)\|$/gm,(match,inner)=>{
+      const cells=inner.split('|').map(c=>c.trim());
+      if(cells.every(c=>/^[\-:]+$/.test(c)))return'<!--sep-->';
+      return'<tr>'+cells.map(c=>`<td>${c}</td>`).join('')+'</tr>';
     });
-  html = html.replace(/((?:<li>.*<\/li>\s*)+)/g, '<ul>$1</ul>');
-  html = html.replace(/<!--sep-->/g, '');
-  html = html.replace(/((?:<tr>.*<\/tr>\s*)+)/g, '<table>$1</table>');
-  html = html.replace(/<table><tr>(.*?)<\/tr>/, (_, row) =>
-    '<table><tr>' + row.replace(/<td>/g, '<th>').replace(/<\/td>/g, '</th>') + '</tr>'
-  );
-  html = html.split('\n').map(line => {
-    const t = line.trim();
-    if (!t) return '';
-    if (/^<[a-z]/.test(t)) return t;
-    return `<p>${t}</p>`;
+  html=html.replace(/((?:<li>.*<\/li>\s*)+)/g,'<ul>$1</ul>');
+  html=html.replace(/<!--sep-->/g,'');
+  html=html.replace(/((?:<tr>.*<\/tr>\s*)+)/g,'<table>$1</table>');
+  html=html.replace(/<table><tr>(.*?)<\/tr>/,(_,row)=>
+    '<table><tr>'+row.replace(/<td>/g,'<th>').replace(/<\/td>/g,'</th>')+'</tr>');
+  html=html.split('\n').map(line=>{
+    const t=line.trim();
+    if(!t)return'';
+    if(/^<[a-z]/.test(t))return t;
+    return`<p>${t}</p>`;
   }).join('\n');
   return html;
 }
+const $=id=>document.getElementById(id);
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
+// --- State ---
+let hierarchy = null;
+let agentHealth = {};
+let selectedNode = null; // null = this orchestrator (root)
 let eventSource = null;
 let busy = false;
-let connected = false;
-let agentHealth = {};
 
-const $ = id => document.getElementById(id);
-const outputBody = $('outputBody');
-
-function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
-function setConnected(ok) {
-  connected = ok;
-  $('statusDot').className = 'status-dot' + (ok ? ' ok' : '');
-  $('statusText').textContent = ok ? '연결됨' : '연결 끊김';
+function setConnected(ok){
+  $('statusDot').className='status-dot'+(ok?' ok':'');
+  $('statusText').textContent=ok?'연결됨':'연결 끊김';
 }
-function setBusy(b) {
-  busy = b;
-  $('btnQuery').disabled = b;
-  $('btnDebate').disabled = b;
-  $('topicInput').disabled = b;
-  $('loadingBar').className = 'loading-bar' + (b ? ' active' : '');
+function setBusy(b){
+  busy=b;
+  $('btnQuery').disabled=b;
+  $('btnDebate').disabled=b;
+  $('topicInput').disabled=b;
+  $('loadingBar').className='loading-bar'+(b?' active':'');
 }
-function clearOutput() {
-  outputBody.innerHTML = '<div class="empty-state">주제를 입력하고 질문하기 또는 토론 시작을 눌러주세요</div>';
-  closeSSE();
-}
-function appendItem(html) {
-  const empty = outputBody.querySelector('.empty-state');
-  if (empty) empty.remove();
-  const div = document.createElement('div');
-  div.className = 'out-item';
-  div.innerHTML = html;
-  outputBody.appendChild(div);
-  outputBody.scrollTop = outputBody.scrollHeight;
-}
-function closeSSE() {
-  if (eventSource) { eventSource.close(); eventSource = null; }
+function closeSSE(){
+  if(eventSource){eventSource.close();eventSource=null;}
   setBusy(false);
 }
 
-// --- Tabs ---
-function switchTab(tab) {
-  $('tabLive').className = 'tab' + (tab === 'live' ? ' active' : '');
-  $('tabHistory').className = 'tab' + (tab === 'history' ? ' active' : '');
-  $('livePanel').style.display = tab === 'live' ? '' : 'none';
-  $('historyPanel').style.display = tab === 'history' ? '' : 'none';
-  if (tab === 'history') loadReports();
-}
-
-// --- Agents ---
-async function loadAgents() {
-  try {
-    const res = await fetch('/agents');
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+// --- Hierarchy Tree ---
+async function refreshHierarchy(){
+  try{
+    const res=await fetch('/hierarchy?recursive=true');
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    hierarchy=await res.json();
     setConnected(true);
-    renderAgents(data.agents || data);
-  } catch (e) { setConnected(false); }
+    renderTree();
+  }catch(e){
+    setConnected(false);
+    $('treeContainer').innerHTML='<div class="tree-empty">계층 구조를 불러올 수 없습니다</div>';
+  }
 }
 
-function renderAgents(agents) {
-  const grid = $('agentsGrid');
-  const addCard = `<div class="agent-card add-card" onclick="openModal()">
-    <div class="add-icon">+</div>
-    <div class="add-label">내 PC 연결하기</div>
-  </div>`;
-  if (!agents || agents.length === 0) {
-    grid.innerHTML = addCard;
-    return;
-  }
-  grid.innerHTML = agents.map(a => {
-    const health = agentHealth[a.name];
-    const dotCls = health === true ? 'online' : health === false ? 'offline' : 'unknown';
-    const statusText = health === true ? 'online' : health === false ? 'offline' : '';
-    const statusCls = health === true ? 'online' : health === false ? 'offline' : '';
-    const skills = (a.skills || []).map(s => `<span class="tag">${esc(s)}</span>`).join('');
-    const dataPaths = (a.data_paths || []).map(d => `<span class="tag data">${esc(d)}</span>`).join('');
-    const mcpServers = (a.mcp_servers || []).map(m => `<span class="tag mcp">${esc(m)}</span>`).join('');
-    return `<div class="agent-card" onclick='openEditModal(${JSON.stringify(a).replace(/'/g,"&#39;")})'>
-      ${statusText ? `<span class="agent-status-text ${statusCls}">${statusText}</span>` : ''}
-      <div class="agent-name"><span class="agent-dot ${dotCls}"></span>${esc(a.name)}</div>
-      <div class="agent-url">${esc(a.url || '')}</div>
-      ${skills ? `<div class="section-label">Skills</div><div class="tag-row">${skills}</div>` : ''}
-      ${dataPaths ? `<div class="section-label">Data</div><div class="tag-row">${dataPaths}</div>` : ''}
-      ${mcpServers ? `<div class="section-label">MCP</div><div class="tag-row">${mcpServers}</div>` : ''}
+function renderTree(){
+  if(!hierarchy){$('treeContainer').innerHTML='<div class="tree-empty">데이터 없음</div>';return;}
+  const container=$('treeContainer');
+  container.innerHTML=renderTreeNode(hierarchy,true);
+  // 루트를 기본 선택
+  if(!selectedNode) selectNode(null);
+}
+
+function renderTreeNode(node,isRoot=false){
+  const hasChildren=node.children&&node.children.length>0;
+  const isOrch=node.agent_type==='orchestrator';
+  const displayName=node.alias||node.name;
+  const health=agentHealth[node.name];
+  const dotCls=isRoot?'online':health===true?'online':health===false?'offline':'unknown';
+  const expandId='expand_'+node.name.replace(/[^a-zA-Z0-9]/g,'_');
+  const childrenId='children_'+node.name.replace(/[^a-zA-Z0-9]/g,'_');
+  const selectedCls=(selectedNode===null&&isRoot)||(selectedNode&&selectedNode.name===node.name)?'selected':'';
+
+  let html=`<div class="tree-node">
+    <div class="tree-row ${selectedCls}" onclick="onTreeClick(event, ${esc2(JSON.stringify(node))}, ${isRoot})" ondblclick="onTreeDblClick(${esc2(JSON.stringify(node))})">
+      <div class="expand-btn ${hasChildren?'':'hidden'} ${hasChildren?'open':''}" id="${expandId}" onclick="toggleExpand(event,'${childrenId}','${expandId}')">&#9654;</div>
+      <span class="tree-dot ${dotCls}"></span>
+      <span class="tree-icon">${isOrch?'\u{1F3DB}':'\u{1F916}'}</span>
+      <span class="tree-label" title="${esc(node.name)}">${esc(displayName)}</span>
+      <span class="tree-type-badge ${isOrch?'orch':'agent'}">${isOrch?'Orch':'Agent'}</span>
     </div>`;
-  }).join('') + addCard;
+
+  if(hasChildren){
+    html+=`<div class="tree-children" id="${childrenId}">`;
+    for(const child of node.children){
+      html+=renderTreeNode(child);
+    }
+    html+=`</div>`;
+  }
+  html+=`</div>`;
+  return html;
 }
 
-// --- Modal ---
-function openModal() { $('connectModal').classList.add('open'); }
-function closeModal() {
-  $('connectModal').classList.remove('open');
-  $('regResult').className = 'form-result';
-  $('regResult').textContent = '';
+function esc2(jsonStr){return jsonStr.replace(/'/g,"&#39;").replace(/"/g,'&quot;');}
+
+function toggleExpand(event,childrenId,expandId){
+  event.stopPropagation();
+  const el=$(childrenId);
+  const btn=$(expandId);
+  if(!el)return;
+  el.classList.toggle('collapsed');
+  btn.classList.toggle('open');
 }
-function switchModalTab(tab) {
-  document.querySelectorAll('.modal-tab').forEach((t,i) => {
-    t.classList.toggle('active', (tab==='register'?0:1)===i);
+
+function onTreeClick(event,node,isRoot){
+  if(event.target.classList.contains('expand-btn'))return;
+  selectNode(isRoot?null:node);
+}
+
+function onTreeDblClick(node){
+  if(node.agent_type==='orchestrator')
+    openEditModalForNode(node);
+}
+
+function selectNode(node){
+  selectedNode=node;
+  // update header
+  if(!node){
+    $('targetName').textContent=hierarchy?(hierarchy.alias||hierarchy.name):'전체';
+    $('targetBadge').textContent='orchestrator';
+    $('targetBadge').className='target-badge orch';
+    $('inputHint').textContent='Enter로 토론 시작 / 이 오케스트레이터의 모든 에이전트 대상';
+  }else{
+    const isOrch=node.agent_type==='orchestrator';
+    $('targetName').textContent=node.alias||node.name;
+    $('targetBadge').textContent=isOrch?'orchestrator':'agent';
+    $('targetBadge').className='target-badge '+(isOrch?'orch':'agent');
+    $('inputHint').textContent=isOrch
+      ?`${node.alias||node.name}의 내부 에이전트들로 토론/질의`
+      :`${node.alias||node.name}에게 직접 질문`;
+  }
+
+  // update selected styling
+  document.querySelectorAll('.tree-row').forEach(r=>r.classList.remove('selected'));
+  // find the right row
+  const rows=document.querySelectorAll('.tree-row');
+  rows.forEach(r=>{
+    const label=r.querySelector('.tree-label');
+    if(!node&&r.closest('.tree-node')===document.querySelector('.tree-node')){
+      r.classList.add('selected');
+    }else if(node&&label&&(label.textContent===(node.alias||node.name))){
+      r.classList.add('selected');
+    }
   });
-  $('panelRegister').classList.toggle('active', tab==='register');
-  $('panelSetup').classList.toggle('active', tab==='setup');
-}
-async function registerAgent() {
-  const name = $('regName').value.trim();
-  const url = $('regUrl').value.trim();
-  const desc = $('regDesc').value.trim();
-  const skills = $('regSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const dataPaths = $('regData').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const mcpServers = $('regMcp').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const result = $('regResult');
 
-  if (!name || !url) {
-    result.className = 'form-result error';
-    result.textContent = '에이전트 이름과 터널 URL은 필수입니다.';
-    return;
-  }
-
-  $('btnRegister').disabled = true;
-  $('btnRegister').textContent = '등록 중...';
-
-  try {
-    const res = await fetch('/agents/register', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({name, url, description: desc, skills, data_paths: dataPaths, mcp_servers: mcpServers})
-    });
-    const data = await res.json();
-    if (res.ok) {
-      result.className = 'form-result success';
-      result.textContent = data.message || '등록 완료!';
-      loadAgents();
-      setTimeout(() => { runHealthcheck(); }, 2000);
-      setTimeout(() => { closeModal(); }, 3000);
-    } else {
-      result.className = 'form-result error';
-      result.textContent = data.error || '등록 실패';
-    }
-  } catch (e) {
-    result.className = 'form-result error';
-    result.textContent = '오류: ' + e.message;
-  } finally {
-    $('btnRegister').disabled = false;
-    $('btnRegister').textContent = '등록하기';
-  }
-}
-function copyText(el) {
-  const text = el.textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    const toast = $('copiedToast');
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 1500);
-  });
+  // update node info
+  renderNodeInfo(node);
 }
 
-// --- Edit Agent Modal ---
-function openEditModal(agent) {
-  $('editOrigName').value = agent.name;
-  $('editName').value = agent.name;
-  $('editUrl').value = agent.url || '';
-  $('editDesc').value = agent.description || '';
-  $('editSkills').value = (agent.skills || []).join(',');
-  $('editData').value = (agent.data_paths || []).join(',');
-  $('editMcp').value = (agent.mcp_servers || []).join(',');
-  $('editTitle').textContent = agent.name + ' 수정';
-  $('editResult').className = 'form-result';
-  $('editResult').textContent = '';
-  $('editModal').classList.add('open');
-}
-function closeEditModal() {
-  $('editModal').classList.remove('open');
-}
-async function saveAgent() {
-  const name = $('editOrigName').value;
-  const url = $('editUrl').value;
-  const desc = $('editDesc').value.trim();
-  const skills = $('editSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const dataPaths = $('editData').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const mcpServers = $('editMcp').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const result = $('editResult');
-
-  $('btnSave').disabled = true;
-  $('btnSave').textContent = '저장 중...';
-  try {
-    const res = await fetch('/agents/register', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({name, url, description: desc, skills, data_paths: dataPaths, mcp_servers: mcpServers})
-    });
-    const data = await res.json();
-    if (res.ok) {
-      result.className = 'form-result success';
-      result.textContent = data.message || '저장 완료!';
-      loadAgents();
-      setTimeout(closeEditModal, 1500);
-    } else {
-      result.className = 'form-result error';
-      result.textContent = data.error || '저장 실패';
-    }
-  } catch (e) {
-    result.className = 'form-result error';
-    result.textContent = '오류: ' + e.message;
-  } finally {
-    $('btnSave').disabled = false;
-    $('btnSave').textContent = '저장';
-  }
-}
-async function deleteAgent() {
-  const name = $('editOrigName').value;
-  if (!confirm(`'${name}' 에이전트를 삭제하시겠습니까?`)) return;
-  $('btnDelete').disabled = true;
-  try {
-    const res = await fetch('/agents/' + encodeURIComponent(name), {method:'DELETE'});
-    const data = await res.json();
-    if (res.ok) {
-      loadAgents();
-      closeEditModal();
-    } else {
-      $('editResult').className = 'form-result error';
-      $('editResult').textContent = data.error || '삭제 실패';
-    }
-  } catch (e) {
-    $('editResult').className = 'form-result error';
-    $('editResult').textContent = '오류: ' + e.message;
-  } finally {
-    $('btnDelete').disabled = false;
-  }
+function renderNodeInfo(node){
+  const panel=$('nodeInfoPanel');
+  if(!node&&hierarchy)node=hierarchy;
+  if(!node){panel.innerHTML='';return;}
+  const skills=(node.skills||[]).map(s=>`<span class="tag">${esc(s)}</span>`).join('');
+  panel.innerHTML=`<div class="node-info">
+    <div class="node-info-title">선택된 노드</div>
+    <div class="node-info-name">${esc(node.alias||node.name)}</div>
+    ${node.description?`<div class="node-info-desc">${esc(node.description)}</div>`:''}
+    ${node.url?`<div class="node-info-url">${esc(node.url)}</div>`:''}
+    ${skills?`<div class="node-info-tags">${skills}</div>`:''}
+  </div>`;
 }
 
 // --- Healthcheck ---
-async function runHealthcheck() {
-  try {
-    const res = await fetch('/agents/health');
-    const data = await res.json();
-    agentHealth = {};
-    (data.agents || []).forEach(a => { agentHealth[a.name] = a.ok; });
-    loadAgents();
-  } catch (e) {}
+async function runHealthcheck(){
+  try{
+    const res=await fetch('/agents/health');
+    const data=await res.json();
+    agentHealth={};
+    (data.agents||[]).forEach(a=>{agentHealth[a.name]=a.ok;});
+    renderTree();
+  }catch(e){}
+}
+
+// --- Query ---
+async function doQuery(){
+  const topic=$('topicInput').value.trim();
+  if(!topic){$('topicInput').focus();return;}
+  switchTab('live');
+  clearEmptyState();
+  setBusy(true);
+  appendItem(`<div class="out-status">질문 전송 중... <span class="spinner"></span></div>`);
+
+  try{
+    let res,data;
+    if(selectedNode){
+      // 특정 노드에 프록시 요청
+      res=await fetch('/proxy/debate',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({target:selectedNode.name,topic})
+      });
+    }else{
+      res=await fetch('/query',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({topic})
+      });
+    }
+    data=await res.json();
+    if(data.error){
+      appendItem(`<div class="out-status phase-error">오류: ${esc(data.error)}</div>`);
+    }else if(data.response){
+      appendItem(`<div class="out-response"><div class="resp-agent">${esc(data.selected_agent||data.agent||'응답')}</div><div class="md">${renderMd(data.response)}</div></div>`);
+    }else if(data.report){
+      appendItem(`<div class="out-report"><div class="report-label">보고서</div><div class="md">${renderMd(data.report)}</div></div>`);
+    }else{
+      appendItem(`<div class="out-response"><div class="md">${renderMd(JSON.stringify(data,null,2))}</div></div>`);
+    }
+  }catch(e){
+    appendItem(`<div class="out-status phase-error">오류: ${esc(e.message)}</div>`);
+  }finally{setBusy(false);}
+}
+
+// --- Debate SSE ---
+function doDebate(){
+  const topic=$('topicInput').value.trim();
+  if(!topic){$('topicInput').focus();return;}
+  switchTab('live');
+  clearEmptyState();
+  closeSSE();
+  setBusy(true);
+
+  if(selectedNode){
+    // 특정 노드 대상: proxy API (non-streaming)
+    appendItem(`<div class="out-status">${esc(selectedNode.alias||selectedNode.name)}에서 토론 진행 중... <span class="spinner"></span></div>`);
+    fetch('/proxy/debate',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({target:selectedNode.name,topic})
+    }).then(r=>r.json()).then(data=>{
+      if(data.error){
+        appendItem(`<div class="out-status phase-error">오류: ${esc(data.error)}</div>`);
+      }else if(data.report){
+        appendItem(`<div class="out-report"><div class="report-label">${esc(selectedNode.alias||selectedNode.name)} 토론 보고서</div><div class="md">${renderMd(data.report)}</div></div>`);
+      }else if(data.response){
+        appendItem(`<div class="out-response"><div class="resp-agent">${esc(data.agent||'응답')}</div><div class="md">${renderMd(data.response)}</div></div>`);
+      }
+      appendItem(`<div class="out-status phase-complete">완료</div>`);
+    }).catch(e=>{
+      appendItem(`<div class="out-status phase-error">오류: ${esc(e.message)}</div>`);
+    }).finally(()=>setBusy(false));
+    return;
+  }
+
+  // 루트 오케스트레이터: SSE 스트리밍
+  appendItem(`<div class="out-status">토론을 시작합니다... <span class="spinner"></span></div>`);
+  const url='/stream/debate?topic='+encodeURIComponent(topic);
+  eventSource=new EventSource(url);
+
+  eventSource.addEventListener('status',e=>{
+    const d=JSON.parse(e.data);
+    const cls=d.phase==='complete'?' phase-complete':d.phase==='error'?' phase-error':'';
+    appendItem(`<div class="out-status${cls}">${esc(d.message)}</div>`);
+    if(d.phase==='complete')closeSSE();
+  });
+  eventSource.addEventListener('opinion',e=>{
+    const d=JSON.parse(e.data);
+    appendItem(`<div class="out-opinion">
+      <div class="agent-label">${esc(d.agent)} <span class="round-tag">Round ${d.round+1}</span></div>
+      <div class="opinion-text md">${renderMd(d.opinion)}</div>
+    </div>`);
+  });
+  eventSource.addEventListener('report',e=>{
+    const d=JSON.parse(e.data);
+    appendItem(`<div class="out-report">
+      <div class="report-label">최종 보고서</div>
+      <div class="md">${renderMd(d.report)}</div>
+      ${d.report_path?`<div class="report-path">저장: ${esc(d.report_path)}</div>`:''}
+    </div>`);
+  });
+  eventSource.addEventListener('single_response',e=>{
+    const d=JSON.parse(e.data);
+    appendItem(`<div class="out-response">
+      <div class="resp-agent">${esc(d.agent)}</div>
+      <div class="md">${renderMd(d.response)}</div>
+    </div>`);
+  });
+  eventSource.addEventListener('error',e=>{
+    try{const d=JSON.parse(e.data);appendItem(`<div class="out-status phase-error">오류: ${esc(d.message)}</div>`);}
+    catch(_){appendItem(`<div class="out-status phase-error">SSE 연결 오류</div>`);}
+    closeSSE();
+  });
+  eventSource.onerror=()=>{
+    if(eventSource&&eventSource.readyState===EventSource.CLOSED)closeSSE();
+  };
+}
+
+// --- Output helpers ---
+function appendItem(html){
+  clearEmptyState();
+  const div=document.createElement('div');
+  div.className='out-item';
+  div.innerHTML=html;
+  $('livePanel').appendChild(div);
+  $('livePanel').scrollTop=$('livePanel').scrollHeight;
+}
+function clearEmptyState(){
+  const es=$('emptyState');
+  if(es)es.remove();
+}
+function clearOutput(){
+  $('livePanel').innerHTML='<div class="empty-state" id="emptyState">사이드바에서 노드를 선택하고 주제를 입력하세요</div>';
+  closeSSE();
+}
+
+// --- Tabs ---
+function switchTab(tab){
+  $('tabLive').className='tab'+(tab==='live'?' active':'');
+  $('tabHistory').className='tab'+(tab==='history'?' active':'');
+  $('livePanel').classList.toggle('active',tab==='live');
+  $('historyPanel').classList.toggle('active',tab==='history');
+  if(tab==='history')loadReports();
 }
 
 // --- Reports ---
-async function loadReports() {
-  const body = $('historyBody');
-  try {
-    const res = await fetch('/reports');
-    const data = await res.json();
-    const reports = data.reports || [];
-    $('historyCount').textContent = reports.length;
-    if (reports.length === 0) {
-      body.innerHTML = '<div class="no-history">토론 내역이 없습니다</div>';
-      return;
-    }
-    body.innerHTML = reports.map((r, i) => {
-      const lines = r.content.split('\n').filter(l => l.trim());
-      const title = (lines[0] || r.filename).replace(/^#\s*/, '');
-      const preview = lines.slice(1, 4).join(' ').substring(0, 150);
-      const dateMatch = r.filename.match(/(\d{8})_(\d{6})/);
-      let dateStr = '';
-      if (dateMatch) {
-        const d = dateMatch[1]; const t = dateMatch[2];
-        dateStr = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)} ${t.slice(0,2)}:${t.slice(2,4)}`;
-      }
-      return `<div class="history-item" onclick="toggleHistory(${i})">
+async function loadReports(){
+  const body=$('historyPanel');
+  try{
+    const res=await fetch('/reports');
+    const data=await res.json();
+    const reports=data.reports||[];
+    $('historyCount').textContent=reports.length;
+    if(!reports.length){body.innerHTML='<div class="no-history">토론 내역이 없습니다</div>';return;}
+    body.innerHTML=reports.map((r,i)=>{
+      const lines=r.content.split('\n').filter(l=>l.trim());
+      const title=(lines[0]||r.filename).replace(/^#\s*/,'');
+      const preview=lines.slice(1,4).join(' ').substring(0,150);
+      const m=r.filename.match(/(\d{8})_(\d{6})/);
+      let dateStr='';
+      if(m)dateStr=`${m[1].slice(0,4)}-${m[1].slice(4,6)}-${m[1].slice(6,8)} ${m[2].slice(0,2)}:${m[2].slice(2,4)}`;
+      return`<div class="history-item" onclick="toggleHistory(${i})">
         <div class="history-meta">
-          <span class="history-type ${r.type}">${r.type === 'debate' ? '토론' : '질문'}</span>
+          <span class="history-type ${r.type}">${r.type==='debate'?'토론':'질문'}</span>
           <span class="history-date">${esc(dateStr)}</span>
         </div>
         <div class="history-title">${esc(title)}</div>
@@ -707,105 +715,101 @@ async function loadReports() {
         <div class="history-detail md" id="histDetail${i}">${renderMd(r.content)}</div>
       </div>`;
     }).join('');
-  } catch (e) {
-    body.innerHTML = '<div class="no-history">내역을 불러올 수 없습니다</div>';
-  }
+  }catch(e){body.innerHTML='<div class="no-history">내역을 불러올 수 없습니다</div>';}
 }
+function toggleHistory(i){const el=$('histDetail'+i);if(el)el.classList.toggle('open');}
 
-function toggleHistory(i) {
-  const el = $('histDetail' + i);
-  if (el) el.classList.toggle('open');
+// --- Register Modal ---
+function openRegisterModal(type){
+  $('regType').value=type||'agent';
+  $('regModalTitle').textContent=type==='orchestrator'?'오케스트레이터 등록':'에이전트 등록';
+  $('regResult').className='form-result';
+  $('registerModal').classList.add('open');
 }
+function closeRegisterModal(){$('registerModal').classList.remove('open');}
+async function doRegister(){
+  const name=$('regName').value.trim();
+  const alias=$('regAlias').value.trim();
+  const url=$('regUrl').value.trim();
+  const desc=$('regDesc').value.trim();
+  const type=$('regType').value;
+  const skills=$('regSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const result=$('regResult');
+  if(!name||!url){result.className='form-result error';result.textContent='이름과 URL은 필수입니다.';return;}
 
-// --- Query ---
-async function doQuery() {
-  const topic = $('topicInput').value.trim();
-  if (!topic) { $('topicInput').focus(); return; }
-  switchTab('live');
-  const empty = outputBody.querySelector('.empty-state');
-  if (empty) empty.remove();
-  setBusy(true);
-  appendItem(`<div class="out-status">질문 전송 중... <span class="spinner"></span></div>`);
-  try {
-    const res = await fetch('/query', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({topic})
+  $('btnRegister').disabled=true;
+  try{
+    const res=await fetch('/agents/register',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,url,description:desc,skills,agent_type:type,alias})
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
-    if (data.response) {
-      appendItem(`<div class="out-response"><div class="resp-agent">${esc(data.selected_agent || data.agent || '응답')}</div><div class="md">${renderMd(data.response)}</div></div>`);
-    } else {
-      appendItem(`<div class="out-response"><div class="md">${renderMd(JSON.stringify(data, null, 2))}</div></div>`);
-    }
-  } catch (e) {
-    appendItem(`<div class="out-status phase-error">오류: ${esc(e.message)}</div>`);
-  } finally { setBusy(false); }
+    const data=await res.json();
+    if(res.ok){
+      result.className='form-result success';
+      result.textContent=data.message||'등록 완료!';
+      refreshHierarchy();
+      setTimeout(()=>{runHealthcheck();},2000);
+      setTimeout(closeRegisterModal,2500);
+    }else{result.className='form-result error';result.textContent=data.error||'등록 실패';}
+  }catch(e){result.className='form-result error';result.textContent='오류: '+e.message;}
+  finally{$('btnRegister').disabled=false;}
 }
 
-// --- Debate SSE ---
-function doDebate() {
-  const topic = $('topicInput').value.trim();
-  if (!topic) { $('topicInput').focus(); return; }
-  switchTab('live');
-  const empty = outputBody.querySelector('.empty-state');
-  if (empty) empty.remove();
-  closeSSE();
-  setBusy(true);
-  appendItem(`<div class="out-status">토론을 시작합니다... <span class="spinner"></span></div>`);
-  const url = '/stream/debate?topic=' + encodeURIComponent(topic);
-  eventSource = new EventSource(url);
-
-  eventSource.addEventListener('status', e => {
-    const d = JSON.parse(e.data);
-    const cls = d.phase === 'complete' ? ' phase-complete' : d.phase === 'error' ? ' phase-error' : '';
-    appendItem(`<div class="out-status${cls}">${esc(d.message)}</div>`);
-    if (d.phase === 'complete') closeSSE();
-  });
-  eventSource.addEventListener('opinion', e => {
-    const d = JSON.parse(e.data);
-    appendItem(`<div class="out-opinion">
-      <div class="agent-label">${esc(d.agent)} <span class="round-tag">Round ${d.round + 1}</span></div>
-      <div class="opinion-text md">${renderMd(d.opinion)}</div>
-    </div>`);
-  });
-  eventSource.addEventListener('report', e => {
-    const d = JSON.parse(e.data);
-    appendItem(`<div class="out-report">
-      <div class="report-label">최종 보고서</div>
-      <div class="md">${renderMd(d.report)}</div>
-      ${d.report_path ? `<div class="report-path">저장: ${esc(d.report_path)}</div>` : ''}
-    </div>`);
-  });
-  eventSource.addEventListener('single_response', e => {
-    const d = JSON.parse(e.data);
-    appendItem(`<div class="out-response">
-      <div class="resp-agent">${esc(d.agent)}</div>
-      <div class="md">${renderMd(d.response)}</div>
-    </div>`);
-  });
-  eventSource.addEventListener('error', e => {
-    try {
-      const d = JSON.parse(e.data);
-      appendItem(`<div class="out-status phase-error">오류: ${esc(d.message)}</div>`);
-    } catch (_) {
-      appendItem(`<div class="out-status phase-error">SSE 연결 오류</div>`);
-    }
-    closeSSE();
-  });
-  eventSource.onerror = () => {
-    if (eventSource && eventSource.readyState === EventSource.CLOSED) closeSSE();
-  };
+// --- Edit Modal ---
+function openEditModalForNode(node){
+  $('editOrigName').value=node.name;
+  $('editName').value=node.name;
+  $('editAlias').value=node.alias||'';
+  $('editUrl').value=node.url||'';
+  $('editDesc').value=node.description||'';
+  $('editType').value=node.agent_type||'agent';
+  $('editSkills').value=(node.skills||[]).join(',');
+  $('editTitle').textContent=(node.alias||node.name)+' 수정';
+  $('editResult').className='form-result';
+  $('editModal').classList.add('open');
+}
+function closeEditModal(){$('editModal').classList.remove('open');}
+async function saveAgent(){
+  const name=$('editOrigName').value;
+  const url=$('editUrl').value;
+  const alias=$('editAlias').value.trim();
+  const desc=$('editDesc').value.trim();
+  const type=$('editType').value;
+  const skills=$('editSkills').value.split(',').map(s=>s.trim()).filter(Boolean);
+  try{
+    const res=await fetch('/agents/register',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({name,url,description:desc,skills,agent_type:type,alias})
+    });
+    const data=await res.json();
+    if(res.ok){
+      $('editResult').className='form-result success';
+      $('editResult').textContent=data.message||'저장 완료!';
+      refreshHierarchy();
+      setTimeout(closeEditModal,1500);
+    }else{$('editResult').className='form-result error';$('editResult').textContent=data.error||'실패';}
+  }catch(e){$('editResult').className='form-result error';$('editResult').textContent='오류: '+e.message;}
+}
+async function deleteAgent(){
+  const name=$('editOrigName').value;
+  if(!confirm(`'${name}'을(를) 삭제하시겠습니까?`))return;
+  try{
+    const res=await fetch('/agents/'+encodeURIComponent(name),{method:'DELETE'});
+    if(res.ok){refreshHierarchy();closeEditModal();}
+    else{const d=await res.json();$('editResult').className='form-result error';$('editResult').textContent=d.error||'실패';}
+  }catch(e){$('editResult').className='form-result error';$('editResult').textContent='오류: '+e.message;}
 }
 
-$('topicInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey && !busy) { e.preventDefault(); doDebate(); }
+// --- Keyboard ---
+$('topicInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&!e.shiftKey&&!busy){e.preventDefault();doDebate();}
 });
 
-loadAgents();
+// --- Init ---
+refreshHierarchy();
 runHealthcheck();
-setInterval(loadAgents, 10000);
-setInterval(runHealthcheck, 30000);
+setInterval(refreshHierarchy,15000);
+setInterval(runHealthcheck,30000);
 </script>
 </body>
 </html>

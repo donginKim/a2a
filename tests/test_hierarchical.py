@@ -1,9 +1,10 @@
 """
 계층형 오케스트레이터 단위 테스트 및 통합 테스트
-- Config 계층형 필드 테스트
+- Config 계층형 필드 테스트 (alias 포함)
 - AgentInfo agent_type 테스트
 - 부모 등록 로직 테스트
 - 타임아웃 동적 조정 테스트
+- Hierarchy API / Proxy API 테스트
 - A2A 프로토콜을 통한 계층형 통신 통합 테스트
 """
 import asyncio
@@ -373,3 +374,167 @@ class TestHierarchicalDebateFlow:
             assert result["mode"] == "debate"
             assert "sub-orch" in result["agents"]
             assert "agent-1" in result["agents"]
+
+
+# ============================================================
+# 7. Alias 테스트
+# ============================================================
+
+class TestAlias:
+    def test_agent_info_alias_default(self):
+        agent = AgentInfo(name="test-agent", url="http://localhost:8001")
+        assert agent.alias == ""
+
+    def test_agent_info_alias_set(self):
+        agent = AgentInfo(name="team-a-orch", url="http://localhost:8000", alias="팀A")
+        assert agent.alias == "팀A"
+
+    def test_orchestrator_config_alias(self):
+        cfg = OrchestratorConfig(name="Meta-Orchestrator", alias="메타")
+        assert cfg.alias == "메타"
+
+    def test_load_config_alias_from_env(self):
+        with patch.dict(os.environ, {"ORCHESTRATOR_ALIAS": "테스트별칭"}, clear=False):
+            cfg = load_config()
+            assert cfg.alias == "테스트별칭"
+
+    @pytest.mark.asyncio
+    async def test_register_with_alias(self):
+        from server import create_app
+        from starlette.testclient import TestClient
+
+        cfg = OrchestratorConfig()
+        app = create_app(cfg)
+
+        with TestClient(app) as client:
+            resp = client.post("/agents/register", json={
+                "name": "team-a-agent",
+                "url": "http://localhost:8001",
+                "alias": "팀A 에이전트",
+            })
+            assert resp.status_code == 200
+            assert resp.json()["alias"] == "팀A 에이전트"
+
+            resp = client.get("/agents")
+            assert resp.json()["agents"][0]["alias"] == "팀A 에이전트"
+
+
+# ============================================================
+# 8. Hierarchy API 테스트
+# ============================================================
+
+class TestHierarchyAPI:
+    @pytest.mark.asyncio
+    async def test_hierarchy_returns_root_info(self):
+        from server import create_app
+        from starlette.testclient import TestClient
+
+        cfg = OrchestratorConfig(
+            name="Meta-Orch",
+            alias="메타",
+            description="최상위 오케스트레이터",
+        )
+        app = create_app(cfg)
+
+        with TestClient(app) as client:
+            resp = client.get("/hierarchy?recursive=false")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["name"] == "Meta-Orch"
+            assert data["alias"] == "메타"
+            assert data["agent_type"] == "orchestrator"
+            assert data["children"] == []
+
+    @pytest.mark.asyncio
+    async def test_hierarchy_with_agents(self):
+        from server import create_app
+        from starlette.testclient import TestClient
+
+        cfg = OrchestratorConfig(name="Orch")
+        app = create_app(cfg)
+
+        with TestClient(app) as client:
+            client.post("/agents/register", json={
+                "name": "agent-1",
+                "url": "http://localhost:8001",
+                "alias": "에이전트1",
+            })
+            client.post("/agents/register", json={
+                "name": "sub-orch",
+                "url": "http://localhost:8000",
+                "agent_type": "orchestrator",
+                "alias": "하위오케",
+            })
+
+            resp = client.get("/hierarchy?recursive=false")
+            data = resp.json()
+            assert len(data["children"]) == 2
+            names = {c["name"] for c in data["children"]}
+            assert "agent-1" in names
+            assert "sub-orch" in names
+
+            # alias 확인
+            aliases = {c["name"]: c["alias"] for c in data["children"]}
+            assert aliases["agent-1"] == "에이전트1"
+            assert aliases["sub-orch"] == "하위오케"
+
+
+# ============================================================
+# 9. Proxy Debate API 테스트
+# ============================================================
+
+class TestProxyDebateAPI:
+    @pytest.mark.asyncio
+    async def test_proxy_to_agent(self):
+        from server import create_app
+        from starlette.testclient import TestClient
+
+        cfg = OrchestratorConfig()
+        app = create_app(cfg)
+
+        with TestClient(app) as client:
+            client.post("/agents/register", json={
+                "name": "test-agent",
+                "url": "http://localhost:8001",
+            })
+
+            # 에이전트가 실제로 동작하지 않으므로 오류가 반환되지만
+            # API 라우팅이 올바르게 동작하는지 확인
+            resp = client.post("/proxy/debate", json={
+                "target": "test-agent",
+                "topic": "테스트 주제",
+            })
+            assert resp.status_code == 200
+            data = resp.json()
+            # 연결 실패이므로 에러 메시지가 response에 포함
+            assert "test-agent" in (data.get("agent", "") + data.get("response", ""))
+
+    @pytest.mark.asyncio
+    async def test_proxy_target_not_found(self):
+        from server import create_app
+        from starlette.testclient import TestClient
+
+        cfg = OrchestratorConfig()
+        app = create_app(cfg)
+
+        with TestClient(app) as client:
+            resp = client.post("/proxy/debate", json={
+                "target": "nonexistent",
+                "topic": "test",
+            })
+            assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_proxy_missing_params(self):
+        from server import create_app
+        from starlette.testclient import TestClient
+
+        cfg = OrchestratorConfig()
+        app = create_app(cfg)
+
+        with TestClient(app) as client:
+            resp = client.post("/proxy/debate", json={"topic": "test"})
+            assert resp.status_code == 400
+
+            resp = client.post("/proxy/debate", json={"target": "x"})
+            assert resp.status_code == 400

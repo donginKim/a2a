@@ -126,6 +126,7 @@ async def register_with_parent(config: OrchestratorConfig) -> None:
         "description": config.description,
         "skills": skills,
         "agent_type": "orchestrator",
+        "alias": config.alias,
     }
 
     try:
@@ -155,6 +156,7 @@ async def register_agent(request: Request) -> JSONResponse:
         data_paths = body.get("data_paths", [])
         mcp_servers = body.get("mcp_servers", [])
         agent_type = body.get("agent_type", "agent")
+        alias = body.get("alias", "")
         if not name or not url:
             return JSONResponse({"error": "name과 url은 필수입니다"}, status_code=400)
 
@@ -167,24 +169,25 @@ async def register_agent(request: Request) -> JSONResponse:
                 agent.data_paths = data_paths
                 agent.mcp_servers = mcp_servers
                 agent.agent_type = agent_type
+                agent.alias = alias
                 return JSONResponse({
                     "message": f"에이전트 '{name}' 업데이트 완료",
                     "url": url, "skills": skills,
                     "data_paths": data_paths, "mcp_servers": mcp_servers,
-                    "agent_type": agent_type,
+                    "agent_type": agent_type, "alias": alias,
                 })
 
         from config import AgentInfo
         cfg.registered_agents.append(AgentInfo(
             name=name, url=url, description=description,
             skills=skills, data_paths=data_paths, mcp_servers=mcp_servers,
-            agent_type=agent_type,
+            agent_type=agent_type, alias=alias,
         ))
         return JSONResponse({
             "message": f"에이전트 '{name}' 등록 완료",
             "url": url, "skills": skills,
             "data_paths": data_paths, "mcp_servers": mcp_servers,
-            "agent_type": agent_type,
+            "agent_type": agent_type, "alias": alias,
         })
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -198,7 +201,7 @@ async def list_agents(request: Request) -> JSONResponse:
             {
                 "name": a.name, "url": a.url, "description": a.description,
                 "skills": a.skills, "data_paths": a.data_paths, "mcp_servers": a.mcp_servers,
-                "agent_type": a.agent_type,
+                "agent_type": a.agent_type, "alias": a.alias,
             }
             for a in cfg.registered_agents
         ]
@@ -311,6 +314,93 @@ async def list_reports(request: Request) -> JSONResponse:
     return JSONResponse({"reports": reports})
 
 
+# REST API: 계층 구조 정보
+async def hierarchy_info(request: Request) -> JSONResponse:
+    """이 오케스트레이터와 하위 에이전트/오케스트레이터의 계층 구조를 반환합니다.
+    하위 오케스트레이터에 대해서는 재귀적으로 구조를 가져옵니다."""
+    cfg: OrchestratorConfig = request.app.state.config
+    recursive = request.query_params.get("recursive", "true").lower() == "true"
+
+    async def build_node(agent_info):
+        node = {
+            "name": agent_info.name,
+            "alias": agent_info.alias or agent_info.name,
+            "url": agent_info.url,
+            "description": agent_info.description,
+            "agent_type": agent_info.agent_type,
+            "skills": agent_info.skills,
+            "children": [],
+        }
+        # 하위 오케스트레이터이면 재귀적으로 하위 구조 가져오기
+        if recursive and agent_info.agent_type == "orchestrator":
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(f"{agent_info.url}hierarchy")
+                    if resp.status_code == 200:
+                        sub = resp.json()
+                        node["children"] = sub.get("children", [])
+            except Exception:
+                pass  # 연결 실패 시 빈 children
+        return node
+
+    children = []
+    for agent in cfg.registered_agents:
+        children.append(await build_node(agent))
+
+    return JSONResponse({
+        "name": cfg.name,
+        "alias": cfg.alias or cfg.name,
+        "agent_type": "orchestrator",
+        "description": cfg.description,
+        "children": children,
+    })
+
+
+# REST API: 특정 노드에 대한 프록시 토론/질의
+async def proxy_debate(request: Request) -> JSONResponse:
+    """특정 하위 오케스트레이터/에이전트에 직접 토론을 요청합니다."""
+    cfg: OrchestratorConfig = request.app.state.config
+    try:
+        body = await request.json()
+        target_name = body.get("target")
+        topic = body.get("topic")
+        if not target_name or not topic:
+            return JSONResponse({"error": "target과 topic은 필수입니다"}, status_code=400)
+
+        # 타겟 찾기
+        target = None
+        for a in cfg.registered_agents:
+            if a.name == target_name:
+                target = a
+                break
+        if not target:
+            return JSONResponse({"error": f"'{target_name}'을 찾을 수 없습니다"}, status_code=404)
+
+        # 하위 오케스트레이터이면 해당 노드의 /debate 호출
+        if target.agent_type == "orchestrator":
+            timeout = cfg.sub_orchestrator_timeout
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.post(
+                    f"{target.url}debate",
+                    json={"topic": topic},
+                )
+                if resp.status_code == 200:
+                    return JSONResponse(resp.json())
+                return JSONResponse({"error": f"하위 오케스트레이터 오류: HTTP {resp.status_code}"}, status_code=502)
+        else:
+            # 일반 에이전트이면 직접 A2A 호출
+            async with httpx.AsyncClient(timeout=120.0) as http_client:
+                result = await call_agent(http_client, target, topic)
+            return JSONResponse({
+                "topic": topic,
+                "mode": "direct",
+                "agent": target.name,
+                "response": result,
+            })
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # SSE 스트리밍 토론
 async def stream_debate(request: Request):
     cfg: OrchestratorConfig = request.app.state.config
@@ -382,6 +472,8 @@ def create_app(config: OrchestratorConfig) -> Starlette:
         Route("/reports", list_reports, methods=["GET"]),
         Route("/debate", start_debate, methods=["POST"]),
         Route("/query", skill_query, methods=["POST"]),
+        Route("/hierarchy", hierarchy_info, methods=["GET"]),
+        Route("/proxy/debate", proxy_debate, methods=["POST"]),
     ]
 
     a2a_inner = a2a_app.build()
