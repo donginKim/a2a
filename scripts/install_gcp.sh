@@ -7,7 +7,7 @@ set -e
 
 PROJECT_DIR="$HOME/a2a"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REQUIRED_PYTHON="3.12"
+MIN_PYTHON="3.12"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; NC='\033[0m'
@@ -17,7 +17,7 @@ warn() { echo -e "  ${YELLOW}!${NC} $1"; }
 fail() { echo -e "  ${RED}✗${NC} $1"; }
 
 echo "=========================================="
-echo "A2A 오케스트레이터 GCP 설치 (Python ${REQUIRED_PYTHON})"
+echo "A2A 오케스트레이터 GCP 설치 (Python ${MIN_PYTHON})"
 echo "=========================================="
 
 # ── 패키지 관리자 감지 ──
@@ -49,12 +49,12 @@ pass "시스템 패키지 완료"
 
 # ── 2. Python 고정 버전 ──
 echo ""
-echo "[2/7] Python ${REQUIRED_PYTHON} 설치..."
+echo "[2/7] Python ${MIN_PYTHON} 설치..."
 python_cmd=""
-for cmd in "python${REQUIRED_PYTHON}" python3; do
+for cmd in "python${MIN_PYTHON}" python3; do
     if command -v "$cmd" &>/dev/null; then
         ver=$("$cmd" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
-        if [ "$ver" = "$REQUIRED_PYTHON" ]; then
+        if [ "$(printf '%s\n' "$MIN_PYTHON" "$ver" | sort -V | head -1)" = "$MIN_PYTHON" ]; then
             python_cmd="$cmd"
             break
         fi
@@ -70,38 +70,38 @@ else
             sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
             sudo apt-get update -qq
         fi
-        sudo apt-get install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-venv" "python${REQUIRED_PYTHON}-dev" 2>/dev/null || {
+        sudo apt-get install -y "python${MIN_PYTHON}" "python${MIN_PYTHON}-venv" "python${MIN_PYTHON}-dev" 2>/dev/null || {
             warn "apt 패키지 없음 → 소스 빌드"
             sudo apt-get install -y build-essential zlib1g-dev libncurses5-dev \
                 libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev \
                 libsqlite3-dev wget libbz2-dev
-            curl -fsSL "https://www.python.org/ftp/python/${REQUIRED_PYTHON}.0/Python-${REQUIRED_PYTHON}.0.tgz" -o /tmp/python.tgz
-            cd /tmp && tar xzf python.tgz && cd "Python-${REQUIRED_PYTHON}.0"
+            curl -fsSL "https://www.python.org/ftp/python/${MIN_PYTHON}.0/Python-${MIN_PYTHON}.0.tgz" -o /tmp/python.tgz
+            cd /tmp && tar xzf python.tgz && cd "Python-${MIN_PYTHON}.0"
             ./configure --enable-optimizations --prefix=/usr/local
             make -j"$(nproc)" && sudo make altinstall
             cd ~ && rm -rf /tmp/python.tgz /tmp/Python-*
         }
     elif [ "$PKG" = "dnf" ]; then
-        sudo dnf install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel" 2>/dev/null || {
+        sudo dnf install -y "python${MIN_PYTHON}" "python${MIN_PYTHON}-devel" 2>/dev/null || {
             sudo dnf install -y epel-release 2>/dev/null || true
             sudo dnf config-manager --set-enabled crb 2>/dev/null || \
                 sudo dnf config-manager --set-enabled powertools 2>/dev/null || true
-            sudo dnf install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel"
+            sudo dnf install -y "python${MIN_PYTHON}" "python${MIN_PYTHON}-devel"
         }
     elif [ "$PKG" = "yum" ]; then
         sudo yum install -y epel-release 2>/dev/null || true
-        sudo yum install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel" 2>/dev/null || {
+        sudo yum install -y "python${MIN_PYTHON}" "python${MIN_PYTHON}-devel" 2>/dev/null || {
             warn "패키지 없음 → 소스 빌드"
             sudo yum groupinstall -y "Development Tools"
             sudo yum install -y openssl-devel bzip2-devel libffi-devel zlib-devel
-            curl -fsSL "https://www.python.org/ftp/python/${REQUIRED_PYTHON}.0/Python-${REQUIRED_PYTHON}.0.tgz" -o /tmp/python.tgz
-            cd /tmp && tar xzf python.tgz && cd "Python-${REQUIRED_PYTHON}.0"
+            curl -fsSL "https://www.python.org/ftp/python/${MIN_PYTHON}.0/Python-${MIN_PYTHON}.0.tgz" -o /tmp/python.tgz
+            cd /tmp && tar xzf python.tgz && cd "Python-${MIN_PYTHON}.0"
             ./configure --enable-optimizations --prefix=/usr/local
             make -j"$(nproc)" && sudo make altinstall
             cd ~ && rm -rf /tmp/python.tgz /tmp/Python-*
         }
     fi
-    python_cmd="python${REQUIRED_PYTHON}"
+    python_cmd="python${MIN_PYTHON}"
     pass "Python 설치 완료: $($python_cmd --version)"
 fi
 
@@ -142,7 +142,7 @@ if [ ! -d "$VENV_DIR" ] || ! "$VENV_DIR/bin/python3" -c "import sys" 2>/dev/null
     need_venv=true
 else
     venv_ver=$("$VENV_DIR/bin/python3" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
-    [ "$venv_ver" != "$REQUIRED_PYTHON" ] && need_venv=true
+    [ "$(printf '%s\n' "$MIN_PYTHON" "$venv_ver" | sort -V | head -1)" != "$MIN_PYTHON" ] && need_venv=true
 fi
 
 if [ "$need_venv" = true ]; then
@@ -209,7 +209,7 @@ pass "systemd 서비스 등록 완료"
 
 echo ""
 echo "=========================================="
-echo -e "${GREEN}설치 완료! (Python ${REQUIRED_PYTHON})${NC}"
+echo -e "${GREEN}설치 완료! (Python ${MIN_PYTHON})${NC}"
 echo ""
 echo "다음 단계:"
 echo "  1. Claude Code 로그인: claude"

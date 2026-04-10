@@ -15,7 +15,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 AGENT_DIR="$PROJECT_DIR/agent"
 ORCH_DIR="$PROJECT_DIR/orchestrator"
 VENV_DIR="$PROJECT_DIR/.venv"
-REQUIRED_PYTHON="3.12"
+MIN_PYTHON="3.12"
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -58,7 +58,7 @@ select_role() {
 # 누락 항목 수집 → Y/N 한 번에 확인 → 자동 설치
 # ──────────────────────────────────────────
 verify_environment() {
-    header "환경 검증 (Python ${REQUIRED_PYTHON} 고정)"
+    header "환경 검증 (Python >= ${MIN_PYTHON})"
 
     local missing=()
     local python_cmd=""
@@ -71,19 +71,20 @@ verify_environment() {
         missing+=("Homebrew")
     fi
 
-    # Python 정확한 버전
-    for cmd in "python${REQUIRED_PYTHON}" python3 python; do
+    # Python >= MIN_PYTHON
+    for cmd in python3 "python${MIN_PYTHON}" python; do
         if command -v "$cmd" &>/dev/null; then
             local ver
             ver=$("$cmd" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
-            if [ "$ver" = "$REQUIRED_PYTHON" ]; then
+            if python3 -c "exit(0 if tuple(map(int,'$ver'.split('.'))) >= tuple(map(int,'${MIN_PYTHON}'.split('.'))) else 1)" 2>/dev/null || \
+               [ "$(printf '%s\n' "$MIN_PYTHON" "$ver" | sort -V | head -1)" = "$MIN_PYTHON" ]; then
                 python_cmd="$cmd"
                 break
             fi
         fi
     done
     if [ -z "$python_cmd" ]; then
-        missing+=("Python ${REQUIRED_PYTHON}")
+        missing+=("Python >= ${MIN_PYTHON}")
     fi
 
     # Node.js
@@ -149,11 +150,11 @@ verify_environment() {
 
     # Python 고정 버전
     if [[ " ${missing[*]} " =~ "Python" ]]; then
-        step "설치" "Python ${REQUIRED_PYTHON}"
+        step "설치" "Python ${MIN_PYTHON}"
         if command -v brew &>/dev/null; then
-            brew install "python@${REQUIRED_PYTHON}"
-            python_cmd="$(brew --prefix python@${REQUIRED_PYTHON})/bin/python${REQUIRED_PYTHON}"
-            [ ! -f "$python_cmd" ] && python_cmd="python${REQUIRED_PYTHON}"
+            brew install "python@${MIN_PYTHON}"
+            python_cmd="$(brew --prefix python@${MIN_PYTHON})/bin/python${MIN_PYTHON}"
+            [ ! -f "$python_cmd" ] && python_cmd="python${MIN_PYTHON}"
         elif command -v apt-get &>/dev/null; then
             sudo apt-get update -qq
             # Ubuntu: deadsnakes PPA 시도
@@ -162,42 +163,42 @@ verify_environment() {
                 sudo add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
                 sudo apt-get update -qq
             fi
-            sudo apt-get install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-venv" "python${REQUIRED_PYTHON}-dev" 2>/dev/null || {
+            sudo apt-get install -y "python${MIN_PYTHON}" "python${MIN_PYTHON}-venv" "python${MIN_PYTHON}-dev" 2>/dev/null || {
                 warn "apt 패키지 없음 → 소스 빌드로 설치합니다"
                 sudo apt-get install -y build-essential zlib1g-dev libncurses5-dev \
                     libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev \
                     libsqlite3-dev wget libbz2-dev
-                curl -fsSL "https://www.python.org/ftp/python/${REQUIRED_PYTHON}.0/Python-${REQUIRED_PYTHON}.0.tgz" -o /tmp/python.tgz
-                cd /tmp && tar xzf python.tgz && cd "Python-${REQUIRED_PYTHON}.0"
+                curl -fsSL "https://www.python.org/ftp/python/${MIN_PYTHON}.0/Python-${MIN_PYTHON}.0.tgz" -o /tmp/python.tgz
+                cd /tmp && tar xzf python.tgz && cd "Python-${MIN_PYTHON}.0"
                 ./configure --enable-optimizations --prefix=/usr/local
                 make -j"$(nproc)" && sudo make altinstall
                 cd "$PROJECT_DIR" && rm -rf /tmp/python.tgz /tmp/Python-*
             }
-            python_cmd="python${REQUIRED_PYTHON}"
+            python_cmd="python${MIN_PYTHON}"
         elif command -v dnf &>/dev/null; then
-            sudo dnf install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel" 2>/dev/null || {
+            sudo dnf install -y "python${MIN_PYTHON}" "python${MIN_PYTHON}-devel" 2>/dev/null || {
                 warn "기본 저장소에 없음 → EPEL + CRB 활성화 후 재시도"
                 sudo dnf install -y epel-release 2>/dev/null || true
                 sudo dnf config-manager --set-enabled crb 2>/dev/null || \
                     sudo dnf config-manager --set-enabled powertools 2>/dev/null || true
-                sudo dnf install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel"
+                sudo dnf install -y "python${MIN_PYTHON}" "python${MIN_PYTHON}-devel"
             }
-            python_cmd="python${REQUIRED_PYTHON}"
+            python_cmd="python${MIN_PYTHON}"
         elif command -v yum &>/dev/null; then
             sudo yum install -y epel-release 2>/dev/null || true
-            sudo yum install -y "python${REQUIRED_PYTHON}" "python${REQUIRED_PYTHON}-devel" 2>/dev/null || {
+            sudo yum install -y "python${MIN_PYTHON}" "python${MIN_PYTHON}-devel" 2>/dev/null || {
                 warn "yum에서 설치 실패 → 소스 빌드로 설치"
                 sudo yum groupinstall -y "Development Tools"
                 sudo yum install -y openssl-devel bzip2-devel libffi-devel zlib-devel
-                curl -fsSL "https://www.python.org/ftp/python/${REQUIRED_PYTHON}.0/Python-${REQUIRED_PYTHON}.0.tgz" -o /tmp/python.tgz
-                cd /tmp && tar xzf python.tgz && cd "Python-${REQUIRED_PYTHON}.0"
+                curl -fsSL "https://www.python.org/ftp/python/${MIN_PYTHON}.0/Python-${MIN_PYTHON}.0.tgz" -o /tmp/python.tgz
+                cd /tmp && tar xzf python.tgz && cd "Python-${MIN_PYTHON}.0"
                 ./configure --enable-optimizations --prefix=/usr/local
                 make -j"$(nproc)" && sudo make altinstall
                 cd "$PROJECT_DIR" && rm -rf /tmp/python.tgz /tmp/Python-*
             }
-            python_cmd="python${REQUIRED_PYTHON}"
+            python_cmd="python${MIN_PYTHON}"
         else
-            fail "지원하지 않는 패키지 관리자입니다. Python ${REQUIRED_PYTHON}을 수동으로 설치해주세요."
+            fail "지원하지 않는 패키지 관리자입니다. Python ${MIN_PYTHON}을 수동으로 설치해주세요."
             exit 1
         fi
         pass "Python 설치 완료: $($python_cmd --version)"
@@ -247,7 +248,7 @@ verify_environment() {
 
     # ── 5. Python venv & 패키지 (항상 실행) ──
 
-    step "설정" "Python ${REQUIRED_PYTHON} 가상환경 & 패키지"
+    step "설정" "Python ${MIN_PYTHON} 가상환경 & 패키지"
 
     # venv가 없거나 버전이 다르면 재생성
     if [ "$need_venv" = true ]; then
@@ -258,8 +259,8 @@ verify_environment() {
         # venv가 있어도 Python 버전 확인
         local venv_ver
         venv_ver=$("$VENV_DIR/bin/python3" --version 2>&1 | grep -oE '[0-9]+\.[0-9]+')
-        if [ "$venv_ver" != "$REQUIRED_PYTHON" ]; then
-            warn "venv Python 버전 불일치 ($venv_ver != $REQUIRED_PYTHON) → 재생성"
+        if [ "$(printf '%s\n' "$MIN_PYTHON" "$venv_ver" | sort -V | head -1)" != "$MIN_PYTHON" ]; then
+            warn "venv Python 버전이 ${MIN_PYTHON} 미만 ($venv_ver) → 재생성"
             rm -rf "$VENV_DIR"
             "$python_cmd" -m venv "$VENV_DIR"
             pass "venv 재생성: $("$VENV_DIR/bin/python3" --version)"
@@ -288,7 +289,9 @@ verify_environment() {
     fi
 
     echo ""
-    pass "환경 준비 완료 (Python ${REQUIRED_PYTHON})"
+    local final_ver
+    final_ver=$("$VENV_DIR/bin/python3" --version 2>&1)
+    pass "환경 준비 완료 ($final_ver)"
 }
 
 # ──────────────────────────────────────────
