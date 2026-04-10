@@ -28,23 +28,87 @@ from config import OrchestratorConfig, AgentInfo
 from knowledge_store import KnowledgeStore
 
 
-def _build_knowledge_context(store: KnowledgeStore, topic: str, max_reports: int = 3) -> str:
-    """과거 관련 보고서를 검색하여 컨텍스트 문자열로 반환합니다."""
+async def normalize_topic(topic: str) -> Dict[str, any]:
+    """Claude로 사용자 입력에서 정규화된 토픽과 검색 키워드를 추출합니다.
+
+    반환:
+        {
+            "normalized": "API 게이트웨이 도입",
+            "keywords": ["API", "게이트웨이", "마이크로서비스", "인프라"]
+        }
+    """
+    prompt = (
+        "다음 사용자 입력에서 핵심 토픽과 검색 키워드를 추출하세요.\n\n"
+        f"사용자 입력: {topic}\n\n"
+        "반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만:\n"
+        "{\n"
+        '  "normalized": "핵심 주제를 명사형으로 간결하게 (예: API 게이트웨이 도입)",\n'
+        '  "keywords": ["관련", "키워드", "목록", "유의어포함"]\n'
+        "}\n\n"
+        "규칙:\n"
+        "- normalized: 동일 주제는 항상 같은 문자열이 되도록 일관성 유지\n"
+        "- keywords: 토픽과 관련된 핵심 단어 3~7개, 유의어/상위 개념 포함"
+    )
+    try:
+        response = await synthesize_with_claude(prompt)
+        match = re.search(r'\{.*?\}', response, re.DOTALL)
+        if match:
+            data = json.loads(match.group())
+            return {
+                "normalized": data.get("normalized", topic),
+                "keywords": data.get("keywords", []),
+            }
+    except Exception as e:
+        print(f"  토픽 정규화 실패 (원본 사용): {e}")
+    return {"normalized": topic, "keywords": []}
+
+
+async def extract_search_keywords(user_input: str) -> str:
+    """Claude로 사용자 질문에서 지식 저장소 검색용 키워드를 추출합니다."""
+    prompt = (
+        "다음 사용자 입력에서 과거 토론 보고서를 검색할 키워드를 추출하세요.\n\n"
+        f"사용자 입력: {user_input}\n\n"
+        "반드시 검색에 사용할 키워드만 공백으로 구분하여 한 줄로 응답하세요.\n"
+        "예시: 마이크로서비스 아키텍처 전환\n"
+        "다른 설명이나 텍스트는 절대 포함하지 마세요."
+    )
+    try:
+        response = await synthesize_with_claude(prompt)
+        # 첫 줄만 사용 (불필요한 설명 제거)
+        keywords = response.strip().split("\n")[0].strip()
+        if keywords:
+            return keywords
+    except Exception:
+        pass
+    return user_input
+
+
+async def _build_knowledge_context(store: KnowledgeStore, topic: str, max_reports: int = 3) -> str:
+    """과거 관련 보고서를 검색하여 컨텍스트 문자열로 반환합니다.
+    Claude로 검색 키워드를 추출한 뒤 FTS 검색하고, latest 버전만 반환합니다.
+    """
     if not store:
         return ""
-    related = store.search_reports(topic, limit=max_reports)
+
+    # Claude로 검색 키워드 추출
+    search_query = await extract_search_keywords(topic)
+    print(f"  [지식 검색] 키워드: {search_query}")
+
+    related = store.search_reports(search_query, limit=max_reports)
     if not related:
         return ""
+
     parts = ["## 과거 관련 토론 참고\n"]
     for r in related:
         date = r["created_at"][:10]
         agents = r.get("agents", "")
+        version = r.get("version", 1)
         # 보고서 전문이 너무 길면 앞부분만
         summary = r["report"][:1500]
         if len(r["report"]) > 1500:
             summary += "\n... (이하 생략)"
         parts.append(
-            f"### [{date}] {r['topic']}\n"
+            f"### [{date}] {r['normalized_topic'] or r['topic']} (v{version})\n"
             f"참여: {agents}\n\n"
             f"{summary}\n"
         )
@@ -377,8 +441,21 @@ async def run_debate(
     """
     history = []
 
+    # 토픽 정규화 (Claude)
+    topic_info = {"normalized": topic, "keywords": []}
+    if knowledge_store:
+        print("[토픽 정규화] Claude로 토픽 추출 중...")
+        topic_info = await normalize_topic(topic)
+        print(f"  정규화: {topic_info['normalized']}")
+        print(f"  키워드: {topic_info['keywords']}")
+
+        # 동일 토픽 기존 보고서 확인
+        existing = knowledge_store.find_by_normalized_topic(topic_info["normalized"])
+        if existing:
+            print(f"  기존 보고서 발견 (v{existing['version']}) → 완료 후 supersede 예정")
+
     # 과거 관련 보고서 검색
-    knowledge_context = _build_knowledge_context(knowledge_store, topic)
+    knowledge_context = await _build_knowledge_context(knowledge_store, topic)
     if knowledge_context:
         print(f"[지식 저장소] 관련 과거 보고서를 컨텍스트에 포함합니다")
 
@@ -487,16 +564,19 @@ async def run_debate(
             f.write("---\n\n")
             f.write(report)
 
-        # 보고서 저장 (지식 저장소)
+        # 보고서 저장 (지식 저장소 - 버전 관리 포함)
         if knowledge_store:
-            knowledge_store.save_report(
+            report_id = knowledge_store.save_report(
                 topic=topic,
+                normalized_topic=topic_info["normalized"],
                 report=report,
                 mode="debate",
                 agents=[a.name for a in agents],
                 report_path=str(report_path),
+                keywords=topic_info["keywords"],
             )
-            print("[지식 저장소] 보고서 저장 완료")
+            saved = knowledge_store.get_report(report_id)
+            print(f"[지식 저장소] 보고서 저장 완료 (v{saved['version'] if saved else '?'})")
 
         print(f"\n보고서 저장 완료: {report_path}")
         return {

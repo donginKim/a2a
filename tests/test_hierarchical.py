@@ -550,13 +550,17 @@ class TestKnowledgeStore:
         store, _ = self._make_store()
         store.save_report(
             topic="마이크로서비스 전환",
+            normalized_topic="마이크로서비스 전환",
             report="Kong API 게이트웨이를 도입하기로 합의",
             mode="debate",
             agents=["agent-a", "agent-b"],
+            keywords=["마이크로서비스", "게이트웨이", "Kong"],
         )
         results = store.search_reports("마이크로서비스")
         assert len(results) >= 1
         assert "Kong" in results[0]["report"]
+        assert results[0]["status"] == "latest"
+        assert results[0]["version"] == 1
         store.close()
 
     def test_search_no_results(self):
@@ -573,16 +577,109 @@ class TestKnowledgeStore:
         assert store.get_report_count() == 2
         store.close()
 
+    def test_version_supersede(self):
+        """동일 정규화 토픽으로 저장하면 기존 보고서가 superseded 되는지 확인"""
+        store, _ = self._make_store()
+
+        # v1 저장
+        id1 = store.save_report(
+            topic="마이크로서비스 전환 논의",
+            normalized_topic="마이크로서비스 전환",
+            report="Kong 추천",
+        )
+        r1 = store.get_report(id1)
+        assert r1["version"] == 1
+        assert r1["status"] == "latest"
+
+        # v2 저장 (같은 normalized_topic)
+        id2 = store.save_report(
+            topic="마이크로서비스 전환 재논의",
+            normalized_topic="마이크로서비스 전환",
+            report="Istio로 변경",
+        )
+        r2 = store.get_report(id2)
+        assert r2["version"] == 2
+        assert r2["status"] == "latest"
+
+        # v1은 superseded
+        r1_updated = store.get_report(id1)
+        assert r1_updated["status"] == "superseded"
+
+        # latest 카운트는 1개
+        assert store.get_report_count() == 1
+        # 전체 카운트는 2개
+        assert store.get_report_count(include_superseded=True) == 2
+        store.close()
+
+    def test_search_only_latest(self):
+        """검색 결과에 superseded가 포함되지 않는지 확인"""
+        store, _ = self._make_store()
+        store.save_report(
+            topic="API 게이트웨이",
+            normalized_topic="API 게이트웨이 도입",
+            report="Kong 도입",
+            keywords=["API", "게이트웨이"],
+        )
+        store.save_report(
+            topic="API 게이트웨이 재논의",
+            normalized_topic="API 게이트웨이 도입",
+            report="Istio로 최종 결정",
+            keywords=["API", "게이트웨이", "Istio"],
+        )
+
+        # latest만 검색
+        results = store.search_reports("API 게이트웨이")
+        assert len(results) == 1
+        assert "Istio" in results[0]["report"]
+
+        # superseded 포함 검색
+        all_results = store.search_reports("API 게이트웨이", include_superseded=True)
+        assert len(all_results) == 2
+        store.close()
+
+    def test_find_by_normalized_topic(self):
+        store, _ = self._make_store()
+        store.save_report(
+            topic="원본 주제",
+            normalized_topic="정규화된 주제",
+            report="내용",
+        )
+        found = store.find_by_normalized_topic("정규화된 주제")
+        assert found is not None
+        assert found["topic"] == "원본 주제"
+
+        not_found = store.find_by_normalized_topic("없는 주제")
+        assert not_found is None
+        store.close()
+
+    def test_topic_history(self):
+        store, _ = self._make_store()
+        store.save_report(topic="t", normalized_topic="T", report="v1")
+        store.save_report(topic="t", normalized_topic="T", report="v2")
+        store.save_report(topic="t", normalized_topic="T", report="v3")
+
+        history = store.get_topic_history("T")
+        assert len(history) == 3
+        assert history[0]["version"] == 3  # 최신이 먼저
+        assert history[2]["version"] == 1
+        store.close()
+
+    def test_different_topics_not_superseded(self):
+        """다른 토픽은 서로 영향 없음"""
+        store, _ = self._make_store()
+        store.save_report(topic="a", normalized_topic="주제A", report="ra")
+        store.save_report(topic="b", normalized_topic="주제B", report="rb")
+        assert store.get_report_count() == 2  # 둘 다 latest
+        store.close()
+
     def test_agent_persistence(self):
         from knowledge_store import KnowledgeStore
         tmp = tempfile.mktemp(suffix=".db")
 
-        # 저장
         store1 = KnowledgeStore(db_path=tmp)
         store1.save_agent(name="test-agent", url="http://localhost:8001", alias="테스트")
         store1.close()
 
-        # 재로드
         store2 = KnowledgeStore(db_path=tmp)
         agents = store2.load_agents()
         assert len(agents) == 1
@@ -608,12 +705,17 @@ class TestKnowledgeStore:
         assert len(store.load_agents()) == 0
         store.close()
 
-    def test_recent_reports(self):
+    def test_recent_reports_latest_only(self):
         store, _ = self._make_store()
         for i in range(5):
-            store.save_report(topic=f"topic-{i}", report=f"report-{i}")
+            store.save_report(
+                topic=f"topic-{i}",
+                normalized_topic=f"topic-{i}",
+                report=f"report-{i}",
+            )
         recent = store.get_recent_reports(limit=3)
         assert len(recent) == 3
+        assert all(r["status"] == "latest" for r in recent)
         store.close()
 
 
